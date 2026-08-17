@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docs-site"
+version = "0.1.0"
+description = "Turn a folder of dumped HTML + PDF files into a browsable, searchable local documentation site."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "pymupdf>=1.24",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.10"]
+
+[project.scripts]
+docs-site = "docs_site.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+docs_site = ["py.typed", "templates/*", "static/css/*", "static/js/*"]
+
+[tool.mypy]
+mypy_path = "src"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["bs4.*", "pymupdf.*"]
+ignore_missing_imports = true

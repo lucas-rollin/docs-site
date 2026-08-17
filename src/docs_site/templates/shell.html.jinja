@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ site_title }} — Docs</title>
+<link rel="stylesheet" href="static/css/shell.css">
+</head>
+<body>
+<header>
+  <div class="site-title">{{ site_title }}</div>
+  <div class="search-wrap">
+    <input id="search-input" type="text" placeholder="Search all files…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <button id="dark-toggle" type="button">🌙 Dark</button>
+</header>
+
+<nav id="left-panel"></nav>
+
+<main>
+  <iframe id="content-frame" src="pages/{{ welcome_file }}"></iframe>
+</main>
+
+<aside id="right-panel">
+  <div class="panel-heading">On this page</div>
+  <div id="toc-body" class="toc-empty">Select a file to see its contents.</div>
+</aside>
+
+<div id="copy-toast" role="status" aria-live="polite"></div>
+
+<script>window.DOCS_MANIFEST = {{ manifest_json }};</script>
+<script src="static/js/shell.js"></script>
+</body>
+</html>
