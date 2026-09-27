@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from pypdf import PdfReader
+from pypdf.errors import PyPdfError
 
 from .types import Heading
 
@@ -31,7 +32,7 @@ def _extract_headings(
                     headings.append(
                         {"level": level, "page": page_num + 1, "text": title.strip()}
                     )
-            except Exception:
+            except (PyPdfError, AttributeError, TypeError, ValueError):
                 continue
     return headings
 
@@ -45,7 +46,7 @@ def process_pdf_file(path: Path) -> PdfResult:
     try:
         outline = reader.outline or []
         headings = _extract_headings(reader, outline)
-    except Exception:
+    except (PyPdfError, AttributeError, TypeError, ValueError):
         headings = []
 
     page_count = len(reader.pages)
@@ -55,7 +56,7 @@ def process_pdf_file(path: Path) -> PdfResult:
             page_text = page.extract_text()
             if page_text:
                 text_chunks.append(page_text)
-        except Exception:
+        except (PyPdfError, AttributeError, TypeError, ValueError):
             continue
 
     plain_text = " ".join(text_chunks)

@@ -1,6 +1,7 @@
 from pathlib import Path
-from docs_site.site_builder import build_site
+
 from docs_site.manifest import scan_folder
+from docs_site.site_builder import build_site
 
 
 def test_scan_and_build_site(tmp_path: Path) -> None:

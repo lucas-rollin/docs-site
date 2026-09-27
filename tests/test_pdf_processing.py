@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from pypdf import PdfWriter
 
 from docs_site.pdf_processing import process_pdf_file
