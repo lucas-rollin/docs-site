@@ -7,7 +7,7 @@ name = "docs-site"
 version = "0.1.0"
 description = "Turn a folder of dumped HTML + PDF files into a browsable, searchable local documentation site."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Lucas Rollin Ferreira", email = "lucasrollinferreira@gmail.com" }
