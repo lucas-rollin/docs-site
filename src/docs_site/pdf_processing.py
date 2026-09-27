@@ -2,9 +2,9 @@
 native PDF viewer handles that inside the iframe)."""
 
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
-import pymupdf
+from pypdf import PdfReader
 
 from .types import Heading
 
@@ -16,20 +16,49 @@ class PdfResult(TypedDict):
     page_count: int
 
 
+def _extract_headings(
+    reader: PdfReader, outline: list[Any], level: int = 1
+) -> list[Heading]:
+    headings: list[Heading] = []
+    for item in outline:
+        if isinstance(item, list):
+            headings.extend(_extract_headings(reader, item, level + 1))
+        else:
+            try:
+                page_num = reader.get_destination_page_number(item)
+                title = getattr(item, "title", "") or ""
+                if page_num is not None and title.strip():
+                    headings.append(
+                        {"level": level, "page": page_num + 1, "text": title.strip()}
+                    )
+            except Exception:
+                continue
+    return headings
+
+
 def process_pdf_file(path: Path) -> PdfResult:
-    doc = pymupdf.open(path)
+    reader = PdfReader(str(path))
+    metadata = reader.metadata
+    raw_title = metadata.title if metadata else ""
+    title = raw_title.strip() if raw_title else path.stem
+
     try:
-        title = (doc.metadata.get("title") or "").strip() or path.stem
+        outline = reader.outline or []
+        headings = _extract_headings(reader, outline)
+    except Exception:
+        headings = []
 
-        headings: list[Heading] = [
-            {"level": level, "page": page, "text": text}
-            for level, text, page in doc.get_toc(simple=True)
-        ]
+    page_count = len(reader.pages)
+    text_chunks: list[str] = []
+    for page in reader.pages:
+        try:
+            page_text = page.extract_text()
+            if page_text:
+                text_chunks.append(page_text)
+        except Exception:
+            continue
 
-        page_count = doc.page_count
-        plain_text = " ".join(doc.load_page(i).get_text() for i in range(page_count))
-    finally:
-        doc.close()
+    plain_text = " ".join(text_chunks)
 
     return {
         "title": title,
