@@ -8,14 +8,42 @@ version = "0.1.0"
 description = "Turn a folder of dumped HTML + PDF files into a browsable, searchable local documentation site."
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Lucas Rollin Ferreira", email = "lucasrollinferreira@gmail.com" }
+]
+keywords = ["documentation", "pdf", "html", "search", "static-site", "reader"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation",
+    "Topic :: Text Processing :: Markup :: HTML",
+]
 dependencies = [
     "beautifulsoup4>=4.12",
-    "pymupdf>=1.24",
     "jinja2>=3.1",
+    "pypdf>=4.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/lucas-rollin/docs-site"
+Repository = "https://github.com/lucas-rollin/docs-site"
+Issues = "https://github.com/lucas-rollin/docs-site/issues"
+
 [dependency-groups]
-dev = ["mypy>=1.10"]
+dev = [
+    "mypy>=1.10",
+    "pytest>=8.0",
+]
 
 [project.scripts]
 docs-site = "docs_site.cli:main"
@@ -33,5 +61,5 @@ warn_unused_configs = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-module = ["bs4.*", "pymupdf.*"]
+module = ["bs4.*"]
 ignore_missing_imports = true

@@ -1,2 +1,29 @@
-docs_site.egg-info/
+# Generated sites
+_site/
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Build & distribution artifacts
 build/
+dist/
+*.egg-info/
+src/*.egg-info/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Type checking caches
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS files
+.DS_Store
+*.swp
+*.swo
