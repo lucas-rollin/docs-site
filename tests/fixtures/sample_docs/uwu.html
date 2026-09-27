@@ -1,0 +1,148 @@
+<h1>HTML Fixture</h1>
+<p>This document serves as a fixture for testing table of contents (TOC) extraction, heading outline hierarchies, and CSS prose typography styling.</p>
+<address>Maintained by the <a href="https://example.com">Fixture Working Group</a></address>
+<p><time datetime="2026-09-27">Last revised: 27 september 2026</time></p>
+<h2>Text Formatting &amp; Inline Elements</h2>
+<p>Good documentation relies on clear typographic visual hierarchy. You can emphasize key points using <strong>strong text</strong> or <em>emphasized italics</em>, highlight <mark>important terms</mark>, and denote <del>deprecated methods</del> alongside <ins>new standards</ins>. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+<p>Inlined code such as <code>render_page(context)</code> should stand out naturally from surrounding text. You may also encounter keyboard inputs like <kbd>Ctrl</kbd> + <kbd>C</kbd>, standard abbreviations like <abbr title="HyperText Markup Language">HTML</abbr>, or technical variables like <var>x</var> and <var>y</var>. Scientific notation exercises superscript and subscript: water is H<sub>2</sub>O, and the classic example is E&nbsp;=&nbsp;mc<sup>2</sup>.</p>
+<h2>Heading Hierarchy &amp; Navigation</h2>
+<p>This section verifies deep heading nesting for TOC generation and slugified anchor ID extraction.</p>
+<h3>Core Concepts</h3>
+<p>Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.</p>
+<h4>Primary Structures</h4>
+<p>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
+<h4>Secondary Structures</h4>
+<p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur. Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse.</p>
+<h3>Composition</h3>
+<p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</p>
+<h5>Nested Detail Level</h5>
+<p>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.</p>
+<h6>Deepest Detail Level</h6>
+<p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est.</p>
+<h2>Lists &amp; Structured Content</h2>
+<p>Structured lists should maintain consistent margins, padding, and marker alignments.</p>
+<h3>Unordered Feature List</h3>
+<ul>
+  <li>Automatic outline generation from headings</li>
+  <li>Static asset handling with zero-rebuild previews</li>
+  <li>Broad format support:<ul>
+      <li>Rich text documents (full semantic parsing)</li>
+      <li>Portable documents (text &amp; outline extraction)</li>
+    </ul>
+  </li>
+  <li>Zero-config local preview workflow</li>
+</ul>
+<h3>Ordered Step-by-Step Guide</h3>
+<ol>
+  <li>Clone the repository locally.</li>
+  <li>Install project dependencies.</li>
+  <li>Run the automated test suite.</li>
+  <li>Preview the build output against sample documents.</li>
+</ol>
+<h3>Task List</h3>
+<ul>
+  <li>☑ Draft the initial outline</li>
+  <li>☑ Review formatting against the style guide</li>
+  <li>☐ Collect feedback from reviewers</li>
+  <li>☐ Publish the final revision</li>
+</ul>
+<h3>Definition Terms</h3>
+<dl>
+  <dt>Manifest</dt>
+  <dd>A structured file containing the blueprint and metadata of a scanned document set.</dd>
+  <dt>Slug</dt>
+  <dd>A URL-friendly string generated from a heading for direct anchor linking.</dd>
+  <dt>Fixture</dt>
+  <dd>A fixed, known piece of sample data used repeatedly to test behavior under consistent conditions.</dd>
+</dl>
+<h2>Code Blocks &amp; Preformatted Text</h2>
+<p>Verify that code blocks preserve whitespace, handle line wrapping, and render monospace fonts accurately.</p>
+<pre class="language-python"><code class="language-python">def fibonacci(n: int) -&gt; list[int]:
+    """Return the first n numbers of the Fibonacci sequence."""
+    sequence: list[int] = []
+    a, b = 0, 1
+    for _ in range(n):
+        sequence.append(a)
+        a, b = b, a + b
+    return sequence
+if __name__ == "__main__":
+    print(fibonacci(10))</code></pre>
+<p>ASCII art and raw terminal output test standard preformatted rendering without inline code wrapping:</p>
+<pre><code>     .--.
+    /    \
+   | ()  () |
+    \  ~~  /
+     '----'
+    /|    |\
+   / |    | \
+  *  |    |  *
+  +-----------+     +-----------+     +-----------+
+  |   INPUT   | --&gt; |  PROCESS  | --&gt; |   OUTPUT  |
+  +-----------+     +-----------+     +-----------+
+        |                 |                 |
+        v                 v                 v
+     parsed            transformed        rendered</code></pre>
+<h2>Quotes, Callouts &amp; Disclosure</h2>
+<p>Blockquotes present cited quotes, highlights, or technical callout blocks.</p>
+<blockquote>
+  <p>Simplicity is a prerequisite for reliability.</p>
+  <p>— <cite>An Engineer's Notebook</cite></p>
+</blockquote>
+<p>Collapsible disclosure widgets are common in modern documentation:</p>
+<details>
+  <summary>Click to expand additional notes</summary>
+  <p>Curabitur pretium tincidunt lacus, et sagittis nunc sagittis sit amet. Nulla facilisi. Donec pulvinar odio velit, vel malesuada arcu blandit quis. This content is hidden by default and only shown on interaction.</p>
+</details>
+<h2>Data Tables</h2>
+<p>Tables must render with clear borders and aligned headers.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Format</th>
+      <th>Support Level</th>
+      <th>Notes</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Alpha</td>
+      <td>Full</td>
+      <td>Baseline reference format</td>
+      <td>Stable</td>
+    </tr>
+    <tr>
+      <td>Beta</td>
+      <td>Partial</td>
+      <td>Missing edge-case handling</td>
+      <td>In progress</td>
+    </tr>
+    <tr>
+      <td>Gamma</td>
+      <td>Planned</td>
+      <td>Design under review</td>
+      <td>Not started</td>
+    </tr>
+  </tbody>
+</table>
+<h2>Media &amp; Figures</h2>
+<p>Figures pair a captioned block with descriptive text, commonly used for diagrams or illustrations.</p>
+<figure>
+  <pre>   ___________
+  |  FIXTURE  |
+  |  SAMPLE   |
+  |___________|
+      |   |
+      |   |
+     _|   |_
+</pre>
+  <figcaption>Figure 1: A placeholder diagram used purely for layout testing.</figcaption>
+</figure>
+<hr>
+<h2>Closing Remarks</h2>
+<p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+<p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit.</p>
+<hr>
+<footer>
+  <small>© 2026 Fixture Document Suite. Special characters test: &amp;, &lt;, &gt;, ", ', &nbsp;, —.</small>
+</footer>
