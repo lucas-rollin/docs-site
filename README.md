@@ -18,15 +18,13 @@ Turn a folder of dumped HTML and PDF files into a clean, searchable, dark-mode-r
 Install globally as a CLI tool using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install git+https://github.com/lucas-rollin/docs-site@v0.1.0
+uv tool install docs-site
 ```
 
-*Note: Ensure `~/.local/bin` is in your `PATH` if it isn't already.*
-
-Or install with standard `pip`:
+Alternatively, install with `pipx`:
 
 ```bash
-pip install .
+pipx install docs-site
 ```
 
 ## Usage
