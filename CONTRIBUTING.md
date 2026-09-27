@@ -92,5 +92,5 @@ src/docs_site/
 
 ### Subsystem Breakdown
 
-- **Frontend (`static/`)**: CSS and JS assets are served directly. Edit these files and refresh your browser to preview changes immediately—no rebuild step required.
+- **Frontend (`static/`)**: CSS and JS assets for presentation and performing the multi-file text search. Requires rerruning `docs-site` to refresh.
 - **Backend (`manifest.py`, etc.)**: Responsible for scanning input files and constructing a JSON-serializable manifest, keeping business logic cleanly separated from rendering logic.
