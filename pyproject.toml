@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "docs-site"
-version = "0.1.0"
+version = "0.1.1"
 description = "Turn a folder of dumped HTML + PDF files into a browsable, searchable local documentation site."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,8 +40,10 @@ Issues = "https://github.com/lucas-rollin/docs-site/issues"
 
 [dependency-groups]
 dev = [
+    "djlint>=1.46.2",
     "mypy>=1.10",
     "pytest>=8.0",
+    "ruff>=0.16.9",
 ]
 
 [project.scripts]
@@ -62,3 +64,10 @@ warn_redundant_casts = true
 [[tool.mypy.overrides]]
 module = ["bs4.*"]
 ignore_missing_imports = true
+
+[tool.djlint]
+profile = "jinja"
+extension = "html.jinja"
+indent = 2
+exclude = ".venv"
+ignore = "H030,J004"
