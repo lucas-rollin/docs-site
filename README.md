@@ -52,44 +52,9 @@ Re-running the command rebuilds the site from scratch.
 - **PDF Viewing**: PDFs are displayed directly using your browser's native PDF reader.
 - **Indexing Cap**: Indexed full text is capped at 400,000 characters per file to keep the client-side search index responsive and lightweight.
 
-## Development
+## Contributing
 
-1. Create a virtual environment and install dependencies:
-
-```bash
-uv sync --group dev
-```
-
-2. Run type checking and tests:
-
-```bash
-uv run mypy src/docs_site
-uv run pytest
-```
-
-3. Test changes locally without reinstalling:
-
-```bash
-uv run python -m docs_site /path/to/test/folder --no-open
-```
-
-### Architecture
-
-```
-src/docs_site/
-├── cli.py             # argparse CLI entry point
-├── site_builder.py    # Orchestrates build: copies static/, renders templates/
-├── manifest.py        # Folder scanning + manifest assembly
-├── html_processing.py # HTML wrapping & heading extraction (BeautifulSoup)
-├── pdf_processing.py  # PDF text & outline extraction (pypdf)
-├── types.py           # Shared typed data structures
-├── utils.py           # Helper functions (slugify, safe_id)
-├── templates/         # Jinja2 templates (shell, welcome page)
-└── static/            # CSS and JS assets copied to build output
-```
-
-- **Frontend (`static/`)**: Edit CSS/JS files directly and refresh your browser to see changes without a rebuild step.
-- **Backend (`manifest.py`, etc.)**: Handles data scanning and outputs a JSON-serializable manifest, keeping Python separate from HTML markup.
+Looking to work on `docs-site` itself? See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, testing, and architecture overview.
 
 ## Project Status
 
