@@ -5,8 +5,6 @@
 
 Turn a folder of dumped HTML and PDF files into a clean, searchable, dark-mode-ready static documentation portal.
 
-No server required—just open `index.html` in your browser.
-
 ## Features
 
 - **Static & Offline**: Generates self-contained static HTML/CSS/JS with zero runtime server required.
@@ -20,7 +18,7 @@ No server required—just open `index.html` in your browser.
 Install globally as a CLI tool using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install .
+uv tool install git+https://github.com/lucas-rollin/docs-site@v0.1.0
 ```
 
 *Note: Ensure `~/.local/bin` is in your `PATH` if it isn't already.*
