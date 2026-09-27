@@ -1,87 +1,63 @@
 # docs-site
 
-Turn a folder of dumped HTML + PDF files into a browsable, searchable local documentation site, then open it in your default browser.
+Turn a folder of dumped HTML and PDF files into a browsable, searchable local documentation site.
 
-## Install (any Linux with Python 3.9+)
+## Installation
+
+Install globally as a CLI tool using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install --user .
+uv tool install .
 ```
 
-This installs the `docs_site` package into your user site-packages **and**
-drops a `docs-site` command into `~/.local/bin` automatically (no manual
-copying needed, that's what `pip install --user` is for).
+*Note: Ensure `~/.local/bin` is in your `PATH` if it isn't already.*
 
-Make sure `~/.local/bin` is on your `PATH`:
+## Usage
 
 ```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-## Use
-
-```bash
+# Build and open the site in your default browser
 docs-site ~/notes/linux-learning
-```
 
-Builds `~/notes/linux-learning/_site/index.html` and opens it. Re-run any
-time you add more files, it rebuilds from scratch.
-
-```bash
+# View CLI options
 docs-site --help
 ```
 
+Re-running the command rebuilds the site from scratch.
+
 ## Development
 
-Install in editable mode with the dev extras (currently just `mypy`) so code
-changes take effect immediately:
+1. Create a virtual environment and install dependencies (including dev tools like `mypy`):
 
 ```bash
-pip install -e ".[dev]"
+uv sync --group dev
 ```
 
-### Where things live
+2. Test changes directly without reinstalling:
+
+```bash
+uv run python -m docs_site /path/to/test/folder --no-open
+```
+
+3. Run type checking:
+
+```bash
+uv run mypy src/docs_site
+```
+
+### Architecture
 
 ```
 src/docs_site/
-├── cli.py                  # argparse entry point
-├── site_builder.py         # orchestrates a build: copies static/, renders templates/
-├── manifest.py             # folder scanning + manifest assembly (no HTML/CSS here)
-├── html_processing.py      # HTML wrapping, heading/id extraction (BeautifulSoup)
-├── pdf_processing.py       # PDF text + outline extraction (PyMuPDF)
-├── types.py                # shared typed structures (e.g. Heading) passed as JSON
-├── utils.py                # slugify / safe_id helpers
-├── py.typed
-├── templates/              # Jinja2 templates
-│   ├── shell.html.jinja    # the doc-site shell (left/right sidebars, search, iframe)
-│   └── welcome.html.jinja  # landing page shown before a file is picked
-└── static/                 # copied byte-for-byte into every build's output
-    ├── css/
-    │   ├── shell.css       # sidebar/header/search styling
-    │   └── content.css     # reading-friendly styling injected into every HTML page
-    └── js/
-        ├── shell.js        # file list, TOC, search, dark-mode logic
-        └── content-dark-listener.js
+├── cli.py             # argparse entry point
+├── site_builder.py    # Orchestrates build: copies static/, renders templates/
+├── manifest.py        # Folder scanning + manifest assembly
+├── html_processing.py # HTML wrapping & heading extraction (BeautifulSoup)
+├── pdf_processing.py  # PDF text & outline extraction (PyMuPDF)
+├── types.py           # Shared typed data structures
+├── utils.py           # Helper functions (slugify, safe_id)
+├── templates/         # Jinja2 templates (shell, welcome page)
+└── static/            # CSS and JS assets copied to build output
 ```
 
-This mirrors a typical Flask/Django layout on purpose: `templates/` holds
-server-rendered markup, `static/` holds assets served as-is. Nothing in
-either directory is Python-templated beyond two Jinja placeholders in
-`shell.html.jinja` (`site_title`, the JSON manifest) and one in
-`welcome.html.jinja` (`count_files`). For development, edit `shell.css`, `shell.js`, or `content.css` directly and just refresh the browser, no rebuild step.
-Conversely, the Python side (`manifest.py`, `html_processing.py`,
-`pdf_processing.py`) has no knowledge of markup, it only produces a
-JSON-serializable manifest (`types.Heading`, `manifest.ManifestEntry`).
-
-To test changes quickly without reinstalling:
-
-```bash
-python -m docs_site /path/to/test/folder --no-open
-```
-
-### Type checking
-
-```bash
-mypy src/docs_site
-```
+- **Frontend (`static/`)**: Edit CSS/JS files directly and refresh your browser to see changes without a rebuild step.
+- **Backend (`manifest.py`, etc.)**: Handles data scanning and outputs a JSON-serializable manifest, keeping Python separate from HTML markup.
