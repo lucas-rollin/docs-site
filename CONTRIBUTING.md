@@ -82,8 +82,12 @@ src/docs_site/
 ├── cli.py             # argparse CLI entry point
 ├── site_builder.py    # Orchestrates build (copies static/, renders templates/)
 ├── manifest.py        # Folder scanning & manifest assembly
-├── html_processing.py # HTML wrapping & heading extraction (BeautifulSoup)
-├── pdf_processing.py  # PDF text & outline extraction (pypdf)
+├── llms_generator.py  # Generates llms.txt and llms-full.txt
+├── processors/        # Document processors (HTML, PDF, Markdown)
+│   ├── base.py
+│   ├── html_processor.py
+│   ├── pdf_processor.py
+│   └── markdown_processor.py
 ├── types.py           # Shared typed data structures
 ├── utils.py           # Helper functions (slugify, safe_id)
 ├── templates/         # Jinja2 templates (shell, welcome page)
