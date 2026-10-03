@@ -34,8 +34,16 @@ def test_markdown_basic_processing(tmp_path: Path) -> None:
     assert output.title == "User Guide"
     assert len(output.headings) == 3
     assert output.headings[0] == {"level": 1, "id": "user-guide", "text": "User Guide"}
-    assert output.headings[1] == {"level": 2, "id": "installation", "text": "Installation"}
-    assert output.headings[2] == {"level": 3, "id": "prerequisites", "text": "Prerequisites"}
+    assert output.headings[1] == {
+        "level": 2,
+        "id": "installation",
+        "text": "Installation",
+    }
+    assert output.headings[2] == {
+        "level": 3,
+        "id": "prerequisites",
+        "text": "Prerequisites",
+    }
     assert "Welcome to the user guide." in output.text
     assert output.src == "pages/guide_md.html"
     assert output.raw_src == "pages/guide_md.raw.md"
