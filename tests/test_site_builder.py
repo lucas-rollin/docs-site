@@ -26,10 +26,12 @@ def test_scan_and_build_site(tmp_path: Path) -> None:
     assert (out_dir / "pages" / "_welcome.html").exists()
     assert (out_dir / "static" / "css" / "shell.css").exists()
     assert (out_dir / "static" / "js" / "shell.js").exists()
+    assert (out_dir / "static" / "js" / "minisearch.min.js").exists()
 
     index_html = (out_dir / "index.html").read_text(encoding="utf-8")
     assert "Test Project" in index_html
     assert "window.DOCS_MANIFEST =" in index_html
+    assert "static/js/minisearch.min.js" in index_html
 
     # Re-scanning should ignore the newly generated _site output folder
     scanned_after = scan_folder(src_dir, out_dir)
