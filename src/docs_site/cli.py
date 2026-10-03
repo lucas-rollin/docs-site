@@ -3,6 +3,7 @@
 import argparse
 import sys
 import webbrowser
+from collections import Counter
 from pathlib import Path
 
 from .site_builder import build_site
@@ -11,12 +12,12 @@ from .site_builder import build_site
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="docs-site",
-        description="Build a searchable local doc site from a folder of HTML + PDF files.",
+        description="Build a searchable local doc site from a folder of documentation files.",
     )
     parser.add_argument(
         "folder",
         type=Path,
-        help="Folder to scan (recursively) for .html/.htm/.pdf files",
+        help="Folder to scan (recursively) for documentation files (.md, .html, .pdf, etc.)",
     )
     parser.add_argument(
         "-o",
@@ -30,6 +31,11 @@ def main(argv=None) -> int:
         action="store_true",
         help="Don't open the site in a browser after building",
     )
+    parser.add_argument(
+        "--no-llms-txt",
+        action="store_true",
+        help="Don't generate llms.txt and llms-full.txt files",
+    )
     args = parser.parse_args(argv)
 
     root = args.folder.resolve()
@@ -39,15 +45,23 @@ def main(argv=None) -> int:
 
     output_dir = (args.output or root / "_site").resolve()
 
-    manifest = build_site(root, output_dir, site_title=root.name)
+    manifest = build_site(
+        root=root,
+        output_dir=output_dir,
+        site_title=root.name,
+        generate_llms=not args.no_llms_txt,
+    )
 
-    n_html = sum(1 for f in manifest["files"] if f["type"] == "html")
-    n_pdf = sum(1 for f in manifest["files"] if f["type"] == "pdf")
-    print(f"Indexed {n_html} HTML file(s) and {n_pdf} PDF file(s).")
+    type_counts = Counter(f.get("type", "unknown") for f in manifest["files"])
+    counts_desc = ", ".join(
+        f"{count} {ftype}" for ftype, count in sorted(type_counts.items())
+    )
+    if counts_desc:
+        print(f"Indexed {len(manifest['files'])} file(s) ({counts_desc}).")
+    else:
+        print(f"Indexed 0 files under {root}.")
+
     print(f"Site written to: {output_dir}")
-
-    if not manifest["files"]:
-        print(f"(No .html/.htm/.pdf files found under {root})")
 
     if not args.no_open:
         webbrowser.open((output_dir / "index.html").as_uri())

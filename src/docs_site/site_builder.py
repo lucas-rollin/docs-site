@@ -13,6 +13,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from .llms_generator import generate_llms_files
 from .manifest import Manifest, build_manifest, scan_folder
 
 try:  # Python 3.11+
@@ -42,7 +43,12 @@ def _jinja_env() -> Environment:
         )
 
 
-def build_site(root: Path, output_dir: Path, site_title: str) -> Manifest:
+def build_site(
+    root: Path,
+    output_dir: Path,
+    site_title: str,
+    generate_llms: bool = True,
+) -> Manifest:
     """Scan `root`, build the manifest, render the site into `output_dir`.
 
     Returns the manifest (handy for callers that want summary stats).
@@ -69,5 +75,8 @@ def build_site(root: Path, output_dir: Path, site_title: str) -> Manifest:
         manifest_json=manifest_json,
     )
     (output_dir / "index.html").write_text(shell_html, encoding="utf-8")
+
+    if generate_llms:
+        generate_llms_files(manifest, output_dir, site_title)
 
     return manifest

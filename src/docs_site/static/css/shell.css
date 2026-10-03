@@ -50,6 +50,26 @@ header .site-title {
   flex-shrink: 0;
 }
 
+.icon {
+  display: inline-block;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
+.type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.45em;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.type-icon .icon {
+  width: 15px;
+  height: 15px;
+}
+
 .search-wrap {
   position: relative;
   flex: 1;
@@ -108,9 +128,13 @@ header .site-title {
   outline-offset: -2px;
 }
 .search-result .sr-title {
-  display: block;
+  display: flex;
+  align-items: center;
   font-weight: 600;
   font-size: 13.5px;
+}
+.search-result .sr-title .type-icon {
+  margin-right: 0.45em;
 }
 .search-result .sr-snippet {
   display: block;
@@ -175,18 +199,53 @@ html.reader-dark #copy-toast kbd {
   background: rgba(0, 0, 0, 0.1);
 }
 
+.llms-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.4em 0.75em;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.llms-badge:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.llms-badge .icon {
+  width: 14px;
+  height: 14px;
+}
+
 #dark-toggle {
   flex-shrink: 0;
-  padding: 0.45em 0.9em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.4em 0.85em;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
+  line-height: 1;
+  transition: all 0.15s ease;
 }
 #dark-toggle:hover {
   border-color: var(--accent);
+  background: var(--hover);
+}
+#dark-toggle .icon {
+  width: 14px;
+  height: 14px;
 }
 
 #left-panel,
@@ -224,7 +283,8 @@ html.reader-dark #copy-toast kbd {
 }
 .file-item a,
 .toc-item a {
-  display: block;
+  display: flex;
+  align-items: center;
   padding: 0.35em 0.5em;
   border-radius: 5px;
   color: var(--fg);
@@ -241,10 +301,6 @@ html.reader-dark #copy-toast kbd {
 .file-item a.active {
   background: var(--accent);
   color: #fff;
-}
-.file-item .type-icon {
-  margin-right: 0.4em;
-  opacity: 0.8;
 }
 .toc-item a {
   padding-left: calc(0.5em + var(--indent, 0px));

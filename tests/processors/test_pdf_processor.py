@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pypdf import PdfWriter
 
-from docs_site.pdf_processing import process_pdf_file
+from docs_site.processors.pdf_processor import PdfProcessor
 
 
 def test_process_pdf_file(tmp_path: Path) -> None:
@@ -22,17 +22,24 @@ def test_process_pdf_file(tmp_path: Path) -> None:
     with pdf_path.open("wb") as f:
         writer.write(f)
 
-    result = process_pdf_file(pdf_path)
+    processor = PdfProcessor()
+    output = processor.process(
+        path=pdf_path,
+        root=tmp_path,
+        pages_dir=tmp_path,
+        fid="sample_pdf",
+        doc_map={},
+    )
 
-    assert result["title"] == "Sample Document Title"
-    assert result["page_count"] == 2
-    assert len(result["headings"]) == 2
-    assert result["headings"][0] == {
+    assert output.title == "Sample Document Title"
+    assert output.page_count == 2
+    assert len(output.headings) == 2
+    assert output.headings[0] == {
         "level": 1,
         "page": 1,
         "text": "Chapter 1: Intro",
     }
-    assert result["headings"][1] == {
+    assert output.headings[1] == {
         "level": 2,
         "page": 2,
         "text": "Section 1.1: Basics",

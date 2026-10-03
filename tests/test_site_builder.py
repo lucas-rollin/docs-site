@@ -12,27 +12,33 @@ def test_scan_and_build_site(tmp_path: Path) -> None:
 
     (src_dir / "doc1.html").write_text("<h1>Doc One</h1>", encoding="utf-8")
     (sub_dir / "doc2.htm").write_text("<h2>Doc Two</h2>", encoding="utf-8")
+    (src_dir / "doc3.md").write_text(
+        "# Doc Three\n\nMarkdown content.", encoding="utf-8"
+    )
     (src_dir / "ignored.txt").write_text("plain text", encoding="utf-8")
 
     out_dir = src_dir / "_site"
 
     scanned = scan_folder(src_dir, out_dir)
-    assert len(scanned) == 2
+    assert len(scanned) == 3
 
     manifest = build_site(src_dir, out_dir, site_title="Test Project")
 
-    assert len(manifest["files"]) == 2
+    assert len(manifest["files"]) == 3
     assert (out_dir / "index.html").exists()
     assert (out_dir / "pages" / "_welcome.html").exists()
     assert (out_dir / "static" / "css" / "shell.css").exists()
     assert (out_dir / "static" / "js" / "shell.js").exists()
     assert (out_dir / "static" / "js" / "minisearch.min.js").exists()
+    assert (out_dir / "llms.txt").exists()
+    assert (out_dir / "llms-full.txt").exists()
 
     index_html = (out_dir / "index.html").read_text(encoding="utf-8")
     assert "Test Project" in index_html
     assert "window.DOCS_MANIFEST =" in index_html
     assert "static/js/minisearch.min.js" in index_html
+    assert "llms.txt" in index_html
 
     # Re-scanning should ignore the newly generated _site output folder
     scanned_after = scan_folder(src_dir, out_dir)
-    assert len(scanned_after) == 2
+    assert len(scanned_after) == 3
