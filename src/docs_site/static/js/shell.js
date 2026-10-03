@@ -168,17 +168,204 @@
     }
   }
 
+  // --- Search indexing (MiniSearch) ----------------------------------------
+
+  let miniSearch = null;
+  if (typeof MiniSearch !== "undefined") {
+    miniSearch = new MiniSearch({
+      fields: ["title", "headings", "text"],
+      storeFields: ["id"],
+      searchOptions: {
+        boost: { title: 5, headings: 2, text: 1 },
+      },
+      processTerm: (term) =>
+        term
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase(),
+    });
+    miniSearch.addAll(
+      MANIFEST.files.map((f) => ({
+        id: f.id,
+        title: f.title || "",
+        headings: (f.headings || []).map((h) => h.text).join(" "),
+        text: f.text || "",
+      })),
+    );
+  }
+
   // --- Search results list, keyboard-navigable -----------------------------
 
-  function highlight(text, query) {
-    const idx = text.toLowerCase().indexOf(query.toLowerCase());
-    if (idx === -1) return escapeHtml(text);
-    return (
-      escapeHtml(text.slice(0, idx)) +
-      "<mark>" +
-      escapeHtml(text.slice(idx, idx + query.length)) +
-      "</mark>" +
-      escapeHtml(text.slice(idx + query.length))
+  function normalizeText(s) {
+    return String(s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  }
+
+  function isWordChar(ch) {
+    return Boolean(ch && /[\p{L}\p{N}]/u.test(ch));
+  }
+
+  function findWordRanges(text, terms) {
+    if (!text || !terms || terms.length === 0) return [];
+    const norm = normalizeText(text);
+    const ranges = [];
+
+    for (const term of terms) {
+      if (!term) continue;
+      const cleanTerm = normalizeText(term).trim();
+      if (!cleanTerm) continue;
+
+      let pos = 0;
+      while (true) {
+        pos = norm.indexOf(cleanTerm, pos);
+        if (pos === -1) break;
+        const atWordStart = pos === 0 || !isWordChar(norm[pos - 1]);
+        if (atWordStart) {
+          ranges.push([pos, pos + cleanTerm.length]);
+        }
+        pos += cleanTerm.length;
+      }
+    }
+    return ranges;
+  }
+
+  function highlightTerms(text, terms) {
+    if (!text) return "";
+    const ranges = findWordRanges(text, terms);
+    if (ranges.length === 0) return escapeHtml(text);
+
+    ranges.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+
+    const merged = [];
+    let curr = ranges[0];
+    for (let i = 1; i < ranges.length; i++) {
+      const next = ranges[i];
+      if (next[0] <= curr[1]) {
+        curr[1] = Math.max(curr[1], next[1]);
+      } else {
+        merged.push(curr);
+        curr = next;
+      }
+    }
+    merged.push(curr);
+
+    let out = "";
+    let lastIdx = 0;
+    for (const [start, end] of merged) {
+      if (start > lastIdx) {
+        out += escapeHtml(text.slice(lastIdx, start));
+      }
+      out += `<mark>${escapeHtml(text.slice(start, end))}</mark>`;
+      lastIdx = end;
+    }
+    if (lastIdx < text.length) {
+      out += escapeHtml(text.slice(lastIdx));
+    }
+    return out;
+  }
+
+  function clipAtWordBoundary(text, start, end, hasPrefix) {
+    let s = start;
+    let e = Math.min(text.length, end);
+    let prefix = "";
+    let suffix = "";
+
+    if (hasPrefix && s > 0) {
+      const spaceBefore = text.lastIndexOf(" ", s);
+      if (spaceBefore !== -1 && s - spaceBefore <= 20) {
+        s = spaceBefore + 1;
+      } else {
+        const spaceAfter = text.indexOf(" ", s);
+        if (spaceAfter !== -1 && spaceAfter - s <= 20) {
+          s = spaceAfter + 1;
+        }
+      }
+      prefix = "…";
+    }
+
+    if (e < text.length) {
+      const spaceBefore = text.lastIndexOf(" ", e);
+      if (spaceBefore !== -1 && spaceBefore > s) {
+        e = spaceBefore;
+      }
+      suffix = "…";
+    }
+
+    return prefix + text.slice(s, e).trim() + suffix;
+  }
+
+  function extractSnippet(file, terms, maxLength = 160) {
+    const text = file.text || "";
+    if (!text.trim()) {
+      if (file.headings && file.headings.length > 0) {
+        return file.headings
+          .map((h) => h.text)
+          .slice(0, 3)
+          .join(" • ");
+      }
+      return file.title || "";
+    }
+
+    const norm = normalizeText(text);
+    const matches = [];
+
+    for (const term of terms) {
+      if (!term) continue;
+      const cleanTerm = normalizeText(term).trim();
+      if (!cleanTerm) continue;
+
+      let pos = 0;
+      while (true) {
+        pos = norm.indexOf(cleanTerm, pos);
+        if (pos === -1) break;
+        const atWordStart = pos === 0 || !isWordChar(norm[pos - 1]);
+        if (atWordStart) {
+          matches.push({
+            start: pos,
+            end: pos + cleanTerm.length,
+            term: cleanTerm,
+          });
+        }
+        pos += cleanTerm.length;
+      }
+    }
+
+    // Title/heading match or no body matches -> start of document text
+    if (matches.length === 0) {
+      return clipAtWordBoundary(text, 0, maxLength, false);
+    }
+
+    matches.sort((a, b) => a.start - b.start);
+
+    // Best-occurrence selection: find window with highest term diversity & count
+    let bestScore = -1;
+    let bestMatchIdx = 0;
+
+    for (let i = 0; i < matches.length; i++) {
+      const winStart = matches[i].start;
+      const winEnd = winStart + maxLength;
+      const coveredTerms = new Set();
+      let count = 0;
+      for (let j = i; j < matches.length && matches[j].start < winEnd; j++) {
+        coveredTerms.add(matches[j].term);
+        count++;
+      }
+      const score = coveredTerms.size * 100 + count;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatchIdx = i;
+      }
+    }
+
+    const targetMatch = matches[bestMatchIdx];
+    const targetStart = Math.max(0, targetMatch.start - 35);
+    return clipAtWordBoundary(
+      text,
+      targetStart,
+      targetStart + maxLength,
+      targetStart > 0,
     );
   }
 
@@ -205,42 +392,55 @@
       searchResults.innerHTML = "";
       return;
     }
-    const q = query.toLowerCase();
-    const scored = [];
-    for (const f of MANIFEST.files) {
-      const titleHit = f.title.toLowerCase().includes(q);
-      const textLower = f.text.toLowerCase();
-      let count = 0;
-      let pos = 0;
-      while (true) {
-        pos = textLower.indexOf(q, pos);
-        if (pos === -1) break;
 
-        count++;
-        pos += q.length;
+    const queryTokens = query.split(/[\s\p{P}]+/u).filter((t) => t.length > 0);
+
+    let hits = [];
+    if (miniSearch) {
+      const searchOptions = {
+        boost: { title: 5, headings: 2, text: 1 },
+        prefix: (_term, index, terms) => index === terms.length - 1,
+        combineWith: "AND",
+      };
+      hits = miniSearch.search(query, searchOptions);
+      if (hits.length === 0) {
+        hits = miniSearch.search(query, {
+          ...searchOptions,
+          combineWith: "OR",
+        });
       }
-      if (!titleHit && count === 0) continue;
-      const idx = textLower.indexOf(q);
-      const start = Math.max(0, idx - 50);
-      const snippet =
-        idx === -1 ? f.text.slice(0, 140) : f.text.slice(start, start + 160);
-      scored.push({ file: f, score: count + (titleHit ? 5 : 0), snippet });
+    } else {
+      const q = query.toLowerCase();
+      for (const f of MANIFEST.files) {
+        const titleHit = f.title.toLowerCase().includes(q);
+        const textHit = f.text.toLowerCase().includes(q);
+        if (titleHit || textHit) {
+          hits.push({ id: f.id, score: titleHit ? 5 : 1, terms: [q] });
+        }
+      }
+      hits.sort((a, b) => b.score - a.score);
     }
-    scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, 20);
+
+    const top = hits.slice(0, 20);
 
     if (top.length === 0) {
       searchResults.innerHTML = '<div class="search-empty">No matches</div>';
     } else {
       searchResults.innerHTML = top
-        .map(
-          (r) => `
-        <button type="button" class="search-result" data-id="${r.file.id}">
-          <span class="sr-title">${iconFor(r.file.type)} ${escapeHtml(r.file.title)}</span>
-          <span class="sr-snippet">${highlight(r.snippet, query)}</span>
+        .map((r) => {
+          const file = fileById(r.id);
+          if (!file) return "";
+          const matchTerms = Array.from(
+            new Set([...queryTokens, ...(r.terms || [])]),
+          );
+          const snippet = extractSnippet(file, matchTerms);
+          return `
+        <button type="button" class="search-result" data-id="${file.id}">
+          <span class="sr-title">${iconFor(file.type)} ${highlightTerms(file.title, matchTerms)}</span>
+          <span class="sr-snippet">${highlightTerms(snippet, matchTerms)}</span>
         </button>
-      `,
-        )
+      `;
+        })
         .join("");
 
       const buttons = resultButtons();
@@ -268,21 +468,39 @@
     searchResults.classList.add("open");
   }
 
-  searchInput.addEventListener("input", (e) => runSearch(e.target.value));
+  let debounceTimer = null;
+  function debounce(fn, delay = 120) {
+    return (...args) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  const debouncedSearch = debounce((val) => runSearch(val), 120);
+
+  searchInput.addEventListener("input", (e) => {
+    debouncedSearch(e.target.value);
+  });
 
   searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      clearTimeout(debounceTimer);
+      if (searchInput.value.trim() !== lastQuery) {
+        runSearch(searchInput.value);
+      }
+      const first = searchResults.querySelector(".search-result");
+      if (first) {
+        e.preventDefault();
+        first.click();
+      }
+      return;
+    }
     if (!searchResults.classList.contains("open")) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       focusResult(0);
     } else if (e.key === "Escape") {
       closeResults();
-    } else if (e.key === "Enter") {
-      const first = searchResults.querySelector(".search-result");
-      if (first) {
-        e.preventDefault();
-        first.click();
-      }
     }
   });
 
