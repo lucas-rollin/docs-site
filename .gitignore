@@ -31,3 +31,7 @@ htmlcov/
 
 # JS / CSS linting
 node_modules/
+
+# Temporary
+*.tmp
+*.tmp.*
