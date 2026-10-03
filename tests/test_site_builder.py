@@ -12,7 +12,9 @@ def test_scan_and_build_site(tmp_path: Path) -> None:
 
     (src_dir / "doc1.html").write_text("<h1>Doc One</h1>", encoding="utf-8")
     (sub_dir / "doc2.htm").write_text("<h2>Doc Two</h2>", encoding="utf-8")
-    (src_dir / "doc3.md").write_text("# Doc Three\n\nMarkdown content.", encoding="utf-8")
+    (src_dir / "doc3.md").write_text(
+        "# Doc Three\n\nMarkdown content.", encoding="utf-8"
+    )
     (src_dir / "ignored.txt").write_text("plain text", encoding="utf-8")
 
     out_dir = src_dir / "_site"

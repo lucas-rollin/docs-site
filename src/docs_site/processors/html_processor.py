@@ -116,10 +116,14 @@ def normalize_html_content(
 
     html_tag = soup.html
     if html_tag is None:
-        soup = BeautifulSoup(ensure_full_document(str(soup), fallback_title), "html.parser")
+        soup = BeautifulSoup(
+            ensure_full_document(str(soup), fallback_title), "html.parser"
+        )
         html_tag = soup.html
     if html_tag is None:
-        raise ValueError(f"could not construct a valid <html> root for {fallback_title}")
+        raise ValueError(
+            f"could not construct a valid <html> root for {fallback_title}"
+        )
 
     head_tag = soup.head
     if head_tag is None:
@@ -132,7 +136,12 @@ def normalize_html_content(
         html_tag.append(body_tag)
 
     title = fallback_title
-    if soup.title and soup.title.string and soup.title.string.strip() and soup.title.string.strip() != fallback_title:
+    if (
+        soup.title
+        and soup.title.string
+        and soup.title.string.strip()
+        and soup.title.string.strip() != fallback_title
+    ):
         title = soup.title.string.strip()
     else:
         h1 = soup.find("h1")

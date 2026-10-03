@@ -8,7 +8,9 @@ def test_llms_txt_and_full_txt_generation(tmp_path: Path) -> None:
     pages_dir = out_dir / "pages"
     pages_dir.mkdir(parents=True)
 
-    (pages_dir / "doc1.raw.md").write_text("# Doc 1\n\nRaw markdown content.", encoding="utf-8")
+    (pages_dir / "doc1.raw.md").write_text(
+        "# Doc 1\n\nRaw markdown content.", encoding="utf-8"
+    )
 
     manifest = {
         "files": [
@@ -34,7 +36,9 @@ def test_llms_txt_and_full_txt_generation(tmp_path: Path) -> None:
         ]
     }
 
-    llms_path, full_path = generate_llms_files(manifest, out_dir, site_title="Demo Docs")
+    llms_path, full_path = generate_llms_files(
+        manifest, out_dir, site_title="Demo Docs"
+    )
 
     assert llms_path.exists()
     assert full_path.exists()
@@ -42,7 +46,10 @@ def test_llms_txt_and_full_txt_generation(tmp_path: Path) -> None:
     llms_content = llms_path.read_text(encoding="utf-8")
     assert "# Demo Docs" in llms_content
     assert "- [Doc One](pages/doc1.html): Sections: Doc One" in llms_content
-    assert "- [Doc Two](pages/doc2.html): Plain text of doc two without headings." in llms_content
+    assert (
+        "- [Doc Two](pages/doc2.html): Plain text of doc two without headings."
+        in llms_content
+    )
     assert "[Full Documentation Corpus](llms-full.txt)" in llms_content
 
     full_content = full_path.read_text(encoding="utf-8")

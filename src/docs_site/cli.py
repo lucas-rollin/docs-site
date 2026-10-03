@@ -53,7 +53,9 @@ def main(argv=None) -> int:
     )
 
     type_counts = Counter(f.get("type", "unknown") for f in manifest["files"])
-    counts_desc = ", ".join(f"{count} {ftype}" for ftype, count in sorted(type_counts.items()))
+    counts_desc = ", ".join(
+        f"{count} {ftype}" for ftype, count in sorted(type_counts.items())
+    )
     if counts_desc:
         print(f"Indexed {len(manifest['files'])} file(s) ({counts_desc}).")
     else:
