@@ -199,27 +199,30 @@ html.reader-dark #copy-toast kbd {
   background: rgba(0, 0, 0, 0.1);
 }
 
-.llms-badge {
+#copy-page-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.45em;
-  padding: 0.4em 0.75em;
+  padding: 0.4em 0.85em;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--muted);
-  text-decoration: none;
+  color: var(--fg);
+  cursor: pointer;
   font-size: 13px;
   line-height: 1;
   transition: all 0.15s ease;
 }
-.llms-badge:hover {
-  color: var(--accent);
+#copy-page-btn:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--hover);
 }
-.llms-badge .icon {
+#copy-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#copy-page-btn .icon {
   width: 14px;
   height: 14px;
 }
