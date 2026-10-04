@@ -47,6 +47,7 @@ def test_markdown_basic_processing(tmp_path: Path) -> None:
     assert "Welcome to the user guide." in output.text
     assert output.src == "pages/guide_md.html"
     assert output.raw_src == "pages/guide_md.raw.md"
+    assert output.md_src == "pages/guide_md.md"
 
     # Verify generated HTML
     html_content = (pages_dir / "guide_md.html").read_text(encoding="utf-8")
@@ -55,9 +56,11 @@ def test_markdown_basic_processing(tmp_path: Path) -> None:
     assert "../static/js/content-dark-listener.js" in html_content
     assert '<h2 id="installation">Installation</h2>' in html_content
 
-    # Verify raw copy
+    # Verify raw copy and canonical markdown
     raw_content = (pages_dir / "guide_md.raw.md").read_text(encoding="utf-8")
     assert raw_content == md_file.read_text(encoding="utf-8")
+    canonical_content = (pages_dir / "guide_md.md").read_text(encoding="utf-8")
+    assert canonical_content == md_file.read_text(encoding="utf-8")
 
 
 def test_markdown_link_rewriting(tmp_path: Path) -> None:

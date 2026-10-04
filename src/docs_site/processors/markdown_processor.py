@@ -44,6 +44,9 @@ class MarkdownProcessor(DocumentProcessor):
         raw_out_path = pages_dir / f"{fid}.raw.md"
         raw_out_path.write_text(raw_text, encoding="utf-8")
 
+        canonical_md_path = pages_dir / f"{fid}.md"
+        canonical_md_path.write_text(raw_text, encoding="utf-8")
+
         # Render markdown to HTML fragment
         rendered_html = markdown.markdown(raw_text, extensions=MARKDOWN_EXTENSIONS)
 
@@ -61,7 +64,8 @@ class MarkdownProcessor(DocumentProcessor):
         return ProcessorOutput(
             title=norm["title"],
             headings=norm["headings"],
-            text=norm["text"],
+            text=raw_text.strip(),
             src=f"pages/{out_path.name}",
             raw_src=f"pages/{raw_out_path.name}",
+            md_src=f"pages/{canonical_md_path.name}",
         )

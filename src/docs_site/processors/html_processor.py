@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urldefrag, urlparse
 
 from bs4 import BeautifulSoup
+from markdownify import markdownify
 
 from ..types import Heading
 from ..utils import slugify
@@ -169,7 +170,17 @@ def normalize_html_content(
             used_ids.add(hid)
         headings.append({"level": int(tag.name[1]), "id": str(hid), "text": text})
 
-    plain_text = soup.get_text(separator=" ", strip=True)
+    # Convert body content to clean structured Markdown (ignoring script, style, and head)
+    body_content = "".join(
+        str(c)
+        for c in body_tag.contents
+        if getattr(c, "name", None) not in ("script", "style")
+    )
+    clean_md = markdownify(
+        body_content,
+        heading_style="ATX",
+        strip=["script", "style"],
+    ).strip()
 
     link_tag = soup.new_tag("link", rel="stylesheet", href=CONTENT_CSS_HREF)
     head_tag.append(link_tag)
@@ -180,7 +191,7 @@ def normalize_html_content(
         "html": str(soup),
         "title": title,
         "headings": headings,
-        "text": plain_text,
+        "text": clean_md,
     }
 
 
@@ -219,9 +230,13 @@ class HtmlProcessor(DocumentProcessor):
         out_path = pages_dir / f"{fid}.html"
         out_path.write_text(norm["html"], encoding="utf-8")
 
+        md_out_path = pages_dir / f"{fid}.md"
+        md_out_path.write_text(norm["text"], encoding="utf-8")
+
         return ProcessorOutput(
             title=norm["title"],
             headings=norm["headings"],
             text=norm["text"],
             src=f"pages/{out_path.name}",
+            md_src=f"pages/{md_out_path.name}",
         )
