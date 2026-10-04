@@ -89,3 +89,46 @@ mark {
   color: #1a1a1a;
   border-radius: 2px;
 }
+
+mark.search-hit {
+  background-color: #fde68a;
+  color: #1a1a1a;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+mark.search-hit-active {
+  background-color: #fbbf24;
+  outline: 2px solid #d97706;
+  outline-offset: 1px;
+}
+
+html.reader-dark mark.search-hit {
+  background-color: #78350f;
+  color: #fef3c7;
+}
+
+html.reader-dark mark.search-hit-active {
+  background-color: #b45309;
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  mark.search-hit-active {
+    animation: search-hit-pulse 1.8s ease-out 1;
+  }
+}
+
+@keyframes search-hit-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(217, 119, 6, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
+  }
+}

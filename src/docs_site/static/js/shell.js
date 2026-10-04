@@ -64,8 +64,8 @@
       const dir = f.relpath.includes("/")
         ? f.relpath.slice(0, f.relpath.lastIndexOf("/"))
         : "";
-      file = groups[dir] = groups[dir] || [];
-      file.push(f);
+      groups[dir] = groups[dir] || [];
+      groups[dir].push(f);
     }
     const dirs = Object.keys(groups).sort();
     let html = "";
@@ -123,16 +123,49 @@
     return file && file.type !== "pdf";
   }
 
+  let activeHighlight = [];
+
   function contentUrl(file, hash) {
     let url = file.src;
-    if (isHtmlPage(file) && darkMode) url += "?dark=1";
-    if (hash) url += hash;
+    if (isHtmlPage(file)) {
+      const params = new URLSearchParams();
+      if (darkMode) params.set("dark", "1");
+      if (activeHighlight && activeHighlight.length > 0) {
+        params.set("hl", activeHighlight.join(" "));
+      }
+      const qs = params.toString();
+      if (qs) url += `?${qs}`;
+      if (hash) url += hash.startsWith("#") ? hash : `#${hash}`;
+    } else if (file.type === "pdf") {
+      let combinedHash = hash || "";
+      if (activeHighlight && activeHighlight.length > 0) {
+        const searchParam = `search=${encodeURIComponent(activeHighlight.join(" "))}`;
+        if (combinedHash) {
+          const stripped = combinedHash.startsWith("#")
+            ? combinedHash.slice(1)
+            : combinedHash;
+          combinedHash = `#${stripped}&${searchParam}`;
+        } else {
+          combinedHash = `#${searchParam}`;
+        }
+      }
+      if (combinedHash) {
+        url += combinedHash.startsWith("#") ? combinedHash : `#${combinedHash}`;
+      }
+    } else if (hash) {
+      url += hash.startsWith("#") ? hash : `#${hash}`;
+    }
     return url;
   }
 
-  function selectFile(id, hash) {
+  function selectFile(id, hash, terms) {
     const file = fileById(id);
     if (!file) return;
+    if (terms !== undefined) {
+      activeHighlight = terms || [];
+    } else if (id !== currentFileId) {
+      activeHighlight = [];
+    }
     currentFileId = id;
     if (copyPageBtn) {
       copyPageBtn.disabled = false;
@@ -194,14 +227,10 @@
     return Promise.resolve(legacyCopy(text));
   }
 
-  function activateResult(id) {
-    const query = lastQuery;
-    selectFile(id);
+  function activateResult(id, terms) {
+    selectFile(id, null, terms);
     searchResults.classList.remove("open");
     searchInput.value = "";
-    if (query) {
-      copyToClipboard(query);
-    }
   }
 
   // --- Search indexing (MiniSearch) ----------------------------------------
@@ -471,7 +500,7 @@
           );
           const snippet = extractSnippet(file, matchTerms);
           return `
-        <button type="button" class="search-result" data-id="${file.id}">
+        <button type="button" class="search-result" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}">
           <span class="sr-title"><span class="type-icon">${iconFor(file.type)}</span>${highlightTerms(file.title, matchTerms)}</span>
           <span class="sr-snippet">${highlightTerms(snippet, matchTerms)}</span>
         </button>
@@ -481,7 +510,15 @@
 
       const buttons = resultButtons();
       buttons.forEach((btn, index) => {
-        btn.addEventListener("click", () => activateResult(btn.dataset.id));
+        btn.addEventListener("click", () => {
+          let terms = [];
+          try {
+            terms = JSON.parse(btn.dataset.terms || "[]");
+          } catch (_e) {
+            terms = [];
+          }
+          activateResult(btn.dataset.id, terms);
+        });
         btn.addEventListener("keydown", (e) => {
           if (e.key === "ArrowDown") {
             e.preventDefault();
