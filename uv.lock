@@ -325,7 +325,6 @@ dependencies = [
     { name = "markdown" },
     { name = "markdownify" },
     { name = "pypdf" },
-    { name = "pytest-cov" },
 ]
 
 [package.dev-dependencies]
@@ -333,6 +332,7 @@ dev = [
     { name = "djlint" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "ruff" },
     { name = "types-markdown" },
 ]
@@ -344,7 +344,6 @@ requires-dist = [
     { name = "markdown", specifier = ">=3.6" },
     { name = "markdownify", specifier = ">=0.14" },
     { name = "pypdf", specifier = ">=4.0" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -352,6 +351,7 @@ dev = [
     { name = "djlint", specifier = ">=1.46.2" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.16.9" },
     { name = "types-markdown", specifier = ">=3.6" },
 ]
