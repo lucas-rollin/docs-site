@@ -16,6 +16,7 @@ class ProcessorOutput:
     text: str
     src: str
     raw_src: str | None = None
+    md_src: str | None = None
     page_count: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 

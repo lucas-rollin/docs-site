@@ -37,7 +37,7 @@ def test_scan_and_build_site(tmp_path: Path) -> None:
     assert "Test Project" in index_html
     assert "window.DOCS_MANIFEST =" in index_html
     assert "static/js/minisearch.min.js" in index_html
-    assert "llms.txt" in index_html
+    assert "copy-page-btn" in index_html
 
     # Re-scanning should ignore the newly generated _site output folder
     scanned_after = scan_folder(src_dir, out_dir)

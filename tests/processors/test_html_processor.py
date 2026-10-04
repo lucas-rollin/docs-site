@@ -60,3 +60,14 @@ def test_process_html_file(tmp_path: Path) -> None:
     html_content = (pages_dir / "test_doc.html").read_text(encoding="utf-8")
     assert "../static/css/content.css" in html_content
     assert "../static/js/content-dark-listener.js" in html_content
+
+    # Structured Markdown generation via markdownify
+    assert output.md_src == "pages/test_doc.md"
+    assert (pages_dir / "test_doc.md").exists()
+    md_content = (pages_dir / "test_doc.md").read_text(encoding="utf-8")
+    assert output.text == md_content
+    assert "# Main Header" in md_content
+    assert "This is paragraph content." in md_content
+    assert "## Sub Header" in md_content
+    # Ensure title tag didn't leak duplicate plain text before the header
+    assert not output.text.startswith("Custom Page Title\n\n#")

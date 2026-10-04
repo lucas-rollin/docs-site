@@ -44,3 +44,9 @@ def test_process_pdf_file(tmp_path: Path) -> None:
         "page": 2,
         "text": "Section 1.1: Basics",
     }
+    assert output.md_src == "pages/sample_pdf.md"
+    assert (tmp_path / "sample_pdf.md").exists()
+    md_content = (tmp_path / "sample_pdf.md").read_text(encoding="utf-8")
+    assert "# Sample Document Title" in md_content
+    assert "## Chapter 1: Intro" in md_content
+    assert "### Section 1.1: Basics" in md_content

@@ -7,10 +7,23 @@
   const searchInput = document.getElementById("search-input");
   const searchResults = document.getElementById("search-results");
   const darkToggle = document.getElementById("dark-toggle");
+  const copyPageBtn = document.getElementById("copy-page-btn");
+  const copyToast = document.getElementById("copy-toast");
 
   let currentFileId = null;
   let darkMode = false;
   let lastQuery = "";
+  let toastTimer = null;
+
+  function showToast(html) {
+    if (!copyToast) return;
+    copyToast.innerHTML = html;
+    copyToast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      copyToast.classList.remove("show");
+    }, 2200);
+  }
 
   function fileById(id) {
     return MANIFEST.files.find((f) => f.id === id);
@@ -121,6 +134,9 @@
     const file = fileById(id);
     if (!file) return;
     currentFileId = id;
+    if (copyPageBtn) {
+      copyPageBtn.disabled = false;
+    }
     contentFrame.src = contentUrl(file, hash);
     renderFileList();
     renderToc(file);
@@ -579,6 +595,20 @@
       }
     }
   })();
+
+  if (copyPageBtn) {
+    copyPageBtn.addEventListener("click", () => {
+      const file = fileById(currentFileId);
+      if (!file) {
+        showToast("No page selected to copy");
+        return;
+      }
+      const title = file.title || file.relpath;
+      copyToClipboard(file.text || "").then(() => {
+        showToast(`Copied <strong>${escapeHtml(title)}</strong> as Markdown`);
+      });
+    });
+  }
 
   renderFileList();
 })();
