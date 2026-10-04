@@ -9,7 +9,9 @@ def test_cli_dump_entire_corpus(tmp_path: Path) -> None:
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
     (docs_dir / "guide.md").write_text("# Guide\n\nGuide content.", encoding="utf-8")
-    (docs_dir / "index.html").write_text("<h1>Index</h1><p>Index content.</p>", encoding="utf-8")
+    (docs_dir / "index.html").write_text(
+        "<h1>Index</h1><p>Index content.</p>", encoding="utf-8"
+    )
 
     stdout_buf = io.StringIO()
     with patch("sys.stdout", stdout_buf):
@@ -28,7 +30,9 @@ def test_cli_dump_specific_file(tmp_path: Path) -> None:
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
     (docs_dir / "guide.md").write_text("# Guide\n\nGuide content.", encoding="utf-8")
-    (docs_dir / "api.html").write_text("<h1>API Reference</h1>\n<p>Endpoint description.</p>", encoding="utf-8")
+    (docs_dir / "api.html").write_text(
+        "<h1>API Reference</h1>\n<p>Endpoint description.</p>", encoding="utf-8"
+    )
 
     stdout_buf = io.StringIO()
     with patch("sys.stdout", stdout_buf):
