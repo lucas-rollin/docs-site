@@ -30,6 +30,7 @@ class ManifestEntry:
     headings: list[Heading] = field(default_factory=list)
     text: str = ""
     raw_src: str | None = None
+    md_src: str | None = None
     page_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -109,6 +110,7 @@ def build_manifest(
             headings=output.headings,
             text=output.text[:MAX_INDEXED_CHARS],
             raw_src=output.raw_src,
+            md_src=output.md_src,
             page_count=output.page_count,
         )
         manifest_entries.append(entry)

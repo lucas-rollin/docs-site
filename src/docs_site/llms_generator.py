@@ -24,7 +24,7 @@ def generate_llms_files(
 
     for f in files:
         title = f.get("title") or f.get("relpath")
-        src = f.get("src", "")
+        src = f.get("md_src") or f.get("src", "")
         headings = f.get("headings", [])
         if headings:
             heading_names = [h.get("text", "") for h in headings[:4] if h.get("text")]
@@ -59,13 +59,13 @@ def generate_llms_files(
         relpath = f.get("relpath", "")
         title = f.get("title", "")
         ftype = f.get("type", "")
-        raw_src = f.get("raw_src")
+        doc_src = f.get("md_src") or f.get("raw_src")
 
         content = ""
-        if raw_src:
-            raw_path = output_dir / raw_src
-            if raw_path.is_file():
-                content = raw_path.read_text(encoding="utf-8", errors="replace")
+        if doc_src:
+            doc_path = output_dir / doc_src
+            if doc_path.is_file():
+                content = doc_path.read_text(encoding="utf-8", errors="replace")
 
         if not content:
             content = f.get("text", "")
