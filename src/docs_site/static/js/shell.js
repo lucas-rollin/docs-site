@@ -79,7 +79,7 @@
       html += "</ul>";
     }
     leftPanel.innerHTML =
-      html || '<div class="toc-empty">No HTML or PDF files found.</div>';
+      html || '<div class="toc-empty">No documents found.</div>';
     leftPanel.querySelectorAll(".file-item a").forEach((a) => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
@@ -104,7 +104,7 @@
     for (const h of file.headings) {
       const indent = (h.level - minLevel) * 12;
       const target = file.type === "pdf" ? `#page=${h.page}` : `#${h.id}`;
-      html += `<li class="toc-item" style="--indent:${indent}px"><a href="#" data-target="${target}">${escapeHtml(h.text)}</a></li>`;
+      html += `<li class="toc-item" style="--indent:${indent}px"><a href="#" data-target="${escapeHtml(target)}">${escapeHtml(h.text)}</a></li>`;
     }
     html += "</ul>";
     tocBody.className = "";

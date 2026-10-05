@@ -3,20 +3,23 @@
   <head>
     <meta charset="utf-8">
     <title>Welcome</title>
+    <link rel="stylesheet" href="../static/css/content.css">
     <style>
       body {
-        font-family: -apple-system, "Segoe UI", sans-serif;
-        color: #444;
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--muted);
         max-width: 520px;
         margin: 15vh auto 0;
         text-align: center;
         line-height: 1.6;
+        background: var(--bg);
       }
-      h1 { font-size: 20px; color: #222; }
+      h1 { font-size: 20px; color: var(--fg); }
     </style>
   </head>
   <body>
     <h1>{{ count_files }} document(s) indexed</h1>
     <p>Pick a file from the left, or search across all of them at the top.</p>
+    <script src="../static/js/content-dark-listener.js"></script>
   </body>
 </html>
