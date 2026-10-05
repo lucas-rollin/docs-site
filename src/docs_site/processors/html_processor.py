@@ -89,17 +89,21 @@ def rewrite_relative_links(
             continue
 
         target_fid = doc_map.get(target_norm)
+        matched_path = target_norm if target_fid else None
         if not target_fid:
-            # Check alternative extensions (e.g. link wrote .html but source is .md)
+            # Check alternative extensions (e.g. link wrote .html but source is .md or .pdf)
             norm_stem = posixpath.splitext(target_norm)[0]
-            for ext in (".md", ".markdown", ".html", ".htm"):
+            for ext in (".md", ".markdown", ".html", ".htm", ".pdf"):
                 cand = norm_stem + ext
                 if cand in doc_map:
                     target_fid = doc_map[cand]
+                    matched_path = cand
                     break
 
         if target_fid:
-            new_href = f"{target_fid}.html"
+            is_pdf = matched_path.lower().endswith(".pdf") if matched_path else False
+            ext = ".pdf" if is_pdf else ".html"
+            new_href = f"{target_fid}{ext}"
             if frag:
                 new_href += f"#{frag}"
             a_tag["href"] = new_href
@@ -157,7 +161,7 @@ def normalize_html_content(
 
     # Process headings
     used_ids = {tag.get("id") for tag in soup.find_all(id=True) if tag.get("id")}
-    headings: list[Heading] = []
+    all_headings: list[Heading] = []
     for tag in soup.find_all(HEADING_TAG_RE):
         text = tag.get_text(strip=True)
         if not text:
@@ -168,7 +172,19 @@ def normalize_html_content(
             tag["id"] = hid
         else:
             used_ids.add(hid)
-        headings.append({"level": int(tag.name[1]), "id": str(hid), "text": text})
+        all_headings.append({"level": int(tag.name[1]), "id": str(hid), "text": text})
+
+    # Omit the top-level document heading from TOC if it represents the document title
+    headings: list[Heading] = []
+    h1_count = sum(1 for h in all_headings if h["level"] == 1)
+    for idx, h in enumerate(all_headings):
+        if (
+            idx == 0
+            and h["level"] == 1
+            and (h1_count == 1 or h["text"].strip().lower() == title.strip().lower())
+        ):
+            continue
+        headings.append(h)
 
     # Convert body content to clean structured Markdown (ignoring script, style, and head)
     body_content = "".join(
