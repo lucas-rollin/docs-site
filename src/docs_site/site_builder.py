@@ -9,17 +9,13 @@ rendered, and the templates/static/ files know nothing about Python.
 import json
 import shutil
 from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
 from .llms_generator import generate_llms_files
 from .manifest import Manifest, build_manifest, scan_folder
-
-try:  # Python 3.11+
-    from importlib.resources.abc import Traversable
-except ImportError:  # Python 3.9 / 3.10
-    from importlib.abc import Traversable  # type: ignore[no-redef,attr-defined]
 
 
 def _package_path(*parts: str) -> Traversable:
@@ -54,6 +50,8 @@ def build_site(
     Returns the manifest (handy for callers that want summary stats).
     """
     pages_dir = output_dir / "pages"
+    if pages_dir.exists():
+        shutil.rmtree(pages_dir)
     pages_dir.mkdir(parents=True, exist_ok=True)
 
     files = scan_folder(root, output_dir)
