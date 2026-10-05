@@ -100,3 +100,43 @@ def test_cli_normal_build(tmp_path: Path) -> None:
     assert (out_dir / "pages" / "doc_md.md").exists()
     output = stdout_buf.getvalue()
     assert "Indexed 1 file(s)" in output
+
+
+def test_cli_version() -> None:
+    stdout_buf = io.StringIO()
+    with patch("sys.stdout", stdout_buf):
+        try:
+            main(["--version"])
+        except SystemExit as exc:
+            assert exc.code == 0
+    assert "docs-site 0.2.0" in stdout_buf.getvalue()
+
+
+def test_cli_dump_clean_stdout_when_file_fails(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "good.md").write_text("# Good Doc\n\nContent.", encoding="utf-8")
+    (docs_dir / "bad.html").write_text("<h1>Bad</h1>", encoding="utf-8")
+
+    stdout_buf = io.StringIO()
+    stderr_buf = io.StringIO()
+
+    # Mock processor failure on bad.html
+    with (
+        patch(
+            "docs_site.processors.html_processor.HtmlProcessor.process",
+            side_effect=ValueError("Corrupt HTML"),
+        ),
+        patch("sys.stdout", stdout_buf),
+        patch("sys.stderr", stderr_buf),
+    ):
+        exit_code = main([str(docs_dir), "--dump"])
+
+    assert exit_code == 0
+    # stdout must contain only the valid markdown and NOT the warning
+    out = stdout_buf.getvalue()
+    assert "Good Doc" in out
+    assert "warning:" not in out
+    # Warning must be emitted to stderr
+    err = stderr_buf.getvalue()
+    assert "warning: skipping bad.html (Corrupt HTML)" in err

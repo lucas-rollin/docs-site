@@ -1,6 +1,7 @@
 """Command-line entry point: `docs-site /path/to/folder`."""
 
 import argparse
+import importlib.metadata
 import sys
 import tempfile
 import webbrowser
@@ -9,6 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from .site_builder import build_site
+
+try:
+    __version__ = importlib.metadata.version("docs-site")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.2.0"
 
 
 def _find_matching_entry(
@@ -33,10 +39,15 @@ def _find_matching_entry(
     return None
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="docs-site",
         description="Build a searchable local doc site from a folder of documentation files.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "folder",
