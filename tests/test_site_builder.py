@@ -42,3 +42,74 @@ def test_scan_and_build_site(tmp_path: Path) -> None:
     # Re-scanning should ignore the newly generated _site output folder
     scanned_after = scan_folder(src_dir, out_dir)
     assert len(scanned_after) == 3
+
+
+def test_scan_folder_ignores_vendor_and_hidden_dirs(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+
+    (src_dir / "valid.md").write_text("# Valid", encoding="utf-8")
+    (src_dir / ".hidden.md").write_text("# Hidden", encoding="utf-8")
+
+    git_dir = src_dir / ".git"
+    git_dir.mkdir()
+    (git_dir / "config.html").write_text("<h1>Git</h1>", encoding="utf-8")
+
+    venv_dir = src_dir / ".venv"
+    venv_dir.mkdir()
+    (venv_dir / "lib.html").write_text("<h1>Venv</h1>", encoding="utf-8")
+
+    node_modules = src_dir / "node_modules"
+    node_modules.mkdir()
+    (node_modules / "pkg.html").write_text("<h1>Pkg</h1>", encoding="utf-8")
+
+    out_dir = src_dir / "_site"
+    scanned = scan_folder(src_dir, out_dir)
+    assert len(scanned) == 1
+    assert scanned[0].name == "valid.md"
+
+
+def test_stale_pages_cleaned_on_rebuild(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    out_dir = tmp_path / "_site"
+
+    f1 = src_dir / "doc1.md"
+    f2 = src_dir / "doc2.md"
+    f1.write_text("# Doc 1", encoding="utf-8")
+    f2.write_text("# Doc 2", encoding="utf-8")
+
+    build_site(src_dir, out_dir, site_title="Demo")
+    assert (out_dir / "pages" / "doc1_md.html").exists()
+    assert (out_dir / "pages" / "doc2_md.html").exists()
+
+    # Delete doc2 and rebuild
+    f2.unlink()
+    build_site(src_dir, out_dir, site_title="Demo")
+    assert (out_dir / "pages" / "doc1_md.html").exists()
+    assert not (out_dir / "pages" / "doc2_md.html").exists()
+    assert not (out_dir / "pages" / "doc2_md.md").exists()
+
+
+def test_welcome_page_dark_mode(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    (src_dir / "doc.md").write_text("# Doc", encoding="utf-8")
+    out_dir = tmp_path / "_site"
+
+    build_site(src_dir, out_dir, site_title="Demo")
+    welcome_html = (out_dir / "pages" / "_welcome.html").read_text(encoding="utf-8")
+    assert "../static/css/content.css" in welcome_html
+    assert "../static/js/content-dark-listener.js" in welcome_html
+
+
+def test_site_title_html_escaping(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    (src_dir / "doc.md").write_text("# Doc", encoding="utf-8")
+    out_dir = tmp_path / "_site"
+
+    build_site(src_dir, out_dir, site_title="<Test & Special>")
+    index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+    assert "&lt;Test &amp; Special&gt;" in index_html
+    assert "<Test & Special>" not in index_html
