@@ -51,13 +51,13 @@ def test_process_html_file(tmp_path: Path) -> None:
     assert "This is paragraph content." in output.text
 
     headings = output.headings
-    assert len(headings) == 3
-    assert headings[0] == {"level": 1, "id": "main-header", "text": "Main Header"}
-    assert headings[1] == {"level": 2, "id": "existing-id", "text": "Sub Header"}
-    assert headings[2] == {"level": 3, "id": "another-sub", "text": "Another Sub"}
+    assert len(headings) == 2
+    assert headings[0] == {"level": 2, "id": "existing-id", "text": "Sub Header"}
+    assert headings[1] == {"level": 3, "id": "another-sub", "text": "Another Sub"}
 
     # Stylesheet and dark listener script injection
     html_content = (pages_dir / "test_doc.html").read_text(encoding="utf-8")
+    assert 'id="main-header"' in html_content
     assert "../static/css/content.css" in html_content
     assert "../static/js/content-dark-listener.js" in html_content
 
@@ -71,3 +71,27 @@ def test_process_html_file(tmp_path: Path) -> None:
     assert "## Sub Header" in md_content
     # Ensure title tag didn't leak duplicate plain text before the header
     assert not output.text.startswith("Custom Page Title\n\n#")
+
+
+def test_html_sample_fixture(tmp_path: Path) -> None:
+    fixture_path = (
+        Path(__file__).parent.parent / "fixtures" / "sample_docs" / "sample.html"
+    )
+    assert fixture_path.exists()
+
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+
+    processor = HtmlProcessor()
+    output = processor.process(
+        path=fixture_path,
+        root=fixture_path.parent,
+        pages_dir=pages_dir,
+        fid="sample_html",
+        doc_map={fixture_path.name: "sample_html"},
+    )
+
+    assert output.title == "HTML Fixture"
+    assert len(output.headings) >= 15
+    assert (pages_dir / "sample_html.html").exists()
+    assert (pages_dir / "sample_html.md").exists()
