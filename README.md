@@ -1,7 +1,9 @@
 # docs-site
 
+[![PyPI](https://img.shields.io/pypi/v/docs-site)](https://pypi.org/project/docs-site/)
+[![CI](https://github.com/lucas-rollin/docs-site/actions/workflows/ci.yml/badge.svg)](https://github.com/lucas-rollin/docs-site/actions/workflows/ci.yml)
+[![Python versions](https://img.shields.io/pypi/pyversions/docs-site)](https://pypi.org/project/docs-site/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python: 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 Turn a folder of Markdown, HTML, and PDF files into a clean, searchable, dark-mode-ready local documentation site with built-in LLM support.
 
@@ -33,6 +35,12 @@ Alternatively, install with `pipx`:
 
 ```bash
 pipx install docs-site
+```
+
+Or with plain `pip`, ideally inside a virtual environment:
+
+```bash
+pip install docs-site
 ```
 
 ## Usage
