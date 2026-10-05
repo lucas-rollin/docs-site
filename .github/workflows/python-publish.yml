@@ -8,7 +8,34 @@ permissions:
   contents: read
 
 jobs:
+  verify-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Check tag matches package version
+        run: |
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          PKG_VER="$(uv run python -c 'import importlib.metadata; print(importlib.metadata.version("docs-site"))')"
+          echo "Release tag version: $TAG_VER, Package version: $PKG_VER"
+          if [ "$TAG_VER" != "$PKG_VER" ]; then
+            echo "Error: Release tag $TAG_VER does not match pyproject version $PKG_VER"
+            exit 1
+          fi
+
   release-build:
+    needs: [verify-and-test]
     runs-on: ubuntu-latest
 
     steps:
