@@ -1,4 +1,5 @@
 import re
+import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,16 @@ class PdfProcessor(DocumentProcessor):
         except (PyPdfError, AttributeError, TypeError, ValueError):
             headings = []
 
+        # Omit top-level heading from TOC if it represents the document title
+        if headings and headings[0]["level"] == 1:
+            first_text = headings[0]["text"].strip().lower()
+            title_lower = title.strip().lower()
+            lvl1_count = sum(1 for h in headings if h["level"] == 1)
+            if first_text == title_lower or (
+                lvl1_count == 1 and first_text in title_lower
+            ):
+                headings = headings[1:]
+
         page_count = len(reader.pages)
         page_headings: dict[int, list[Heading]] = defaultdict(list)
         for h in headings:
@@ -112,14 +123,15 @@ class PdfProcessor(DocumentProcessor):
         md_out_path = pages_dir / f"{fid}.md"
         md_out_path.write_text(clean_md, encoding="utf-8")
 
-        relpath = path.relative_to(root).as_posix()
-        src = (Path("..") / relpath).as_posix()
+        pdf_out_path = pages_dir / f"{fid}.pdf"
+        if path.resolve() != pdf_out_path.resolve():
+            shutil.copy2(path, pdf_out_path)
 
         return ProcessorOutput(
             title=title,
             headings=headings,
             text=clean_md,
-            src=src,
+            src=f"pages/{pdf_out_path.name}",
             md_src=f"pages/{md_out_path.name}",
             page_count=page_count,
         )

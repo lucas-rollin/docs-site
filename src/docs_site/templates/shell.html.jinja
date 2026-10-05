@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{{ site_title }} — Docs</title>
+    <title>{{ site_title | e }} — Docs</title>
     <link rel="stylesheet" href="static/css/shell.css">
   </head>
   <body>
     <header>
-      <div class="site-title">{{ site_title }}</div>
+      <div class="site-title">{{ site_title | e }}</div>
       <div class="search-wrap">
         <input id="search-input"
                type="text"

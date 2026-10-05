@@ -32,14 +32,13 @@ def test_markdown_basic_processing(tmp_path: Path) -> None:
     )
 
     assert output.title == "User Guide"
-    assert len(output.headings) == 3
-    assert output.headings[0] == {"level": 1, "id": "user-guide", "text": "User Guide"}
-    assert output.headings[1] == {
+    assert len(output.headings) == 2
+    assert output.headings[0] == {
         "level": 2,
         "id": "installation",
         "text": "Installation",
     }
-    assert output.headings[2] == {
+    assert output.headings[1] == {
         "level": 3,
         "id": "prerequisites",
         "text": "Prerequisites",
@@ -76,6 +75,7 @@ def test_markdown_link_rewriting(tmp_path: Path) -> None:
         "# Topic\n\n"
         "[Relative Link](other.md#section)\n"
         "[Root Link](../root.md)\n"
+        "[PDF Link](manual.pdf#page=2)\n"
         "[External Link](https://example.com)\n"
         "[Anchor Only](#internal)\n",
         encoding="utf-8",
@@ -84,6 +84,7 @@ def test_markdown_link_rewriting(tmp_path: Path) -> None:
     doc_map = {
         "sub/topic.md": "sub_topic_md",
         "sub/other.md": "sub_other_md",
+        "sub/manual.pdf": "sub_manual_pdf",
         "root.md": "root_md",
     }
 
@@ -99,6 +100,7 @@ def test_markdown_link_rewriting(tmp_path: Path) -> None:
     html_content = (pages_dir / "sub_topic_md.html").read_text(encoding="utf-8")
     assert 'href="sub_other_md.html#section"' in html_content
     assert 'href="root_md.html"' in html_content
+    assert 'href="sub_manual_pdf.pdf#page=2"' in html_content
     assert 'href="https://example.com"' in html_content
     assert 'target="_blank"' in html_content
     assert 'href="#internal"' in html_content
@@ -139,7 +141,9 @@ def test_markdown_tables_and_code_blocks(tmp_path: Path) -> None:
 
 
 def test_markdown_sample_fixture(tmp_path: Path) -> None:
-    fixture_path = Path("tests/fixtures/sample_docs/>w<.md")
+    fixture_path = (
+        Path(__file__).parent.parent / "fixtures" / "sample_docs" / "sample.md"
+    )
     assert fixture_path.exists()
 
     pages_dir = tmp_path / "pages"

@@ -1,5 +1,6 @@
 """Scan a folder for supported files and build the JSON manifest the frontend reads."""
 
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict
@@ -13,6 +14,23 @@ INDEXABLE_SUFFIXES = DEFAULT_REGISTRY.all_suffixes()
 
 # Per-file cap on indexed text so the manifest can't explode on huge docs.
 MAX_INDEXED_CHARS = 400_000
+
+IGNORED_DIR_NAMES = {
+    ".git",
+    ".github",
+    ".venv",
+    "venv",
+    ".env",
+    "env",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "dist",
+    "build",
+    "_site",
+}
 
 
 @dataclass
@@ -57,6 +75,9 @@ def scan_folder(
             continue  # already inside the generated site — don't re-index it
         except ValueError:
             pass
+        rel_parts = p.relative_to(root).parts
+        if any(part.startswith(".") or part in IGNORED_DIR_NAMES for part in rel_parts):
+            continue
         if p.suffix.lower() in active_suffixes:
             files.append(p)
     return files
@@ -98,8 +119,16 @@ def build_manifest(
                 doc_map=doc_map,
             )
         except Exception as exc:  # noqa: BLE001 - keep building the rest of the site
-            print(f"warning: skipping {relpath} ({exc})")
+            print(f"warning: skipping {relpath} ({exc})", file=sys.stderr)
             continue
+
+        text = output.text
+        if len(text) > MAX_INDEXED_CHARS:
+            print(
+                f"warning: text for {relpath} exceeds {MAX_INDEXED_CHARS} chars, truncated in manifest",
+                file=sys.stderr,
+            )
+            text = text[:MAX_INDEXED_CHARS]
 
         entry = ManifestEntry(
             id=fid,
@@ -108,7 +137,7 @@ def build_manifest(
             relpath=relpath,
             src=output.src,
             headings=output.headings,
-            text=output.text[:MAX_INDEXED_CHARS],
+            text=text,
             raw_src=output.raw_src,
             md_src=output.md_src,
             page_count=output.page_count,

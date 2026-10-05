@@ -44,9 +44,39 @@ def test_process_pdf_file(tmp_path: Path) -> None:
         "page": 2,
         "text": "Section 1.1: Basics",
     }
+    assert output.src == "pages/sample_pdf.pdf"
+    assert (tmp_path / "sample_pdf.pdf").exists()
     assert output.md_src == "pages/sample_pdf.md"
     assert (tmp_path / "sample_pdf.md").exists()
     md_content = (tmp_path / "sample_pdf.md").read_text(encoding="utf-8")
     assert "# Sample Document Title" in md_content
     assert "## Chapter 1: Intro" in md_content
     assert "### Section 1.1: Basics" in md_content
+
+
+def test_pdf_sample_fixture(tmp_path: Path) -> None:
+    fixture_path = (
+        Path(__file__).parent.parent / "fixtures" / "sample_docs" / "sample.pdf"
+    )
+    assert fixture_path.exists()
+
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+
+    processor = PdfProcessor()
+    output = processor.process(
+        path=fixture_path,
+        root=fixture_path.parent,
+        pages_dir=pages_dir,
+        fid="sample_pdf",
+        doc_map={fixture_path.name: "sample_pdf"},
+    )
+
+    assert output.title == "PDF Fixture"
+    assert output.page_count == 5
+    assert len(output.headings) == 18
+    assert output.headings[0]["text"] == "Text Formatting & Inline Elements"
+    assert output.headings[0]["level"] == 1
+    assert output.headings[0]["page"] == 1
+    assert (pages_dir / "sample_pdf.pdf").exists()
+    assert (pages_dir / "sample_pdf.md").exists()

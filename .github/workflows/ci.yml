@@ -28,6 +28,18 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev --python 3.14
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install node dependencies
+        run: npm install
+
+      - name: Run Biome check
+        run: npx biome check
+
       - name: Run Ruff
         run: |
           uv run ruff check .
@@ -39,15 +51,20 @@ jobs:
       - name: Run type check
         run: uv run mypy src/docs_site
 
-      - name: Run tests
-        run: uv run pytest
-
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        include:
+        - { os: ubuntu-latest,  python-version: "3.11" }
+        - { os: ubuntu-latest,  python-version: "3.12" }
+        - { os: ubuntu-latest,  python-version: "3.13" }
+        - { os: ubuntu-latest,  python-version: "3.14" }
+        - { os: macos-latest,   python-version: "3.11" }
+        - { os: macos-latest,   python-version: "3.14" }
+        - { os: windows-latest, python-version: "3.11" }
+        - { os: windows-latest, python-version: "3.14" }
 
     env:
       UV_LINK_MODE: copy
