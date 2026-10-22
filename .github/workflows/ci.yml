@@ -35,7 +35,10 @@ jobs:
           cache: npm
 
       - name: Install node dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm test
 
       - name: Run Biome check
         run: npx biome check
