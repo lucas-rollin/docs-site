@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-22
+
+### Fixed
+- **Search Term Semantics**: Enforce strict AND matching across all terms by default and remove silent OR fallback.
+- **Whole-Word Matching**: Validate both start and end word boundaries to prevent substring false-positives (e.g. *of* matching *often* or *roof*).
+- **Phrase-First Highlighting**: Group multi-word phrases and quoted exact phrases into unified `<mark>` elements without fragmenting or hitting marker caps on common words.
+
+### Added
+- **Clipboard-Assisted Page Search**: Selecting a global search result automatically copies the search query to the clipboard, focuses the document viewer, and prompts a shortcut toast (`Ctrl+F` / `⌘F`).
+
 ## [0.2.0] - 2026-10-04
 
 ### Added
