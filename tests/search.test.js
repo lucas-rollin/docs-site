@@ -176,3 +176,100 @@ test("Highlight query parsing in content-dark-listener.js", () => {
   assert.deepStrictEqual(singleParsed.tokens, ["installation"]);
   assert.strictEqual(singleParsed.exactOnly, false);
 });
+
+test("Clipboard-assisted search transition in shell.js", async () => {
+  let copiedText = "";
+  const mockClipboard = {
+    writeText: async (text) => {
+      copiedText = text;
+      return true;
+    },
+  };
+
+  const mockWindow = {
+    navigator: {
+      clipboard: mockClipboard,
+      platform: "Linux x86_64",
+    },
+  };
+
+  const toast = {
+    innerHTML: "",
+    classList: {
+      add: (c) => toast.classes.add(c),
+      remove: (c) => toast.classes.delete(c),
+    },
+    classes: new Set(),
+  };
+
+  const searchResults = {
+    classList: {
+      add: (c) => searchResults.classes.add(c),
+      remove: (c) => searchResults.classes.delete(c),
+      contains: (c) => searchResults.classes.has(c),
+    },
+    classes: new Set(["open"]),
+  };
+
+  const searchInput = { value: "installation guide" };
+  const contentFrame = { src: "" };
+
+  const mockDocument = {
+    getElementById: (id) => {
+      if (id === "copy-toast") return toast;
+      if (id === "search-results") return searchResults;
+      if (id === "search-input") return searchInput;
+      if (id === "content-frame") return contentFrame;
+      return null;
+    },
+    createElement: () => ({ style: {}, focus: () => {}, select: () => {} }),
+    body: { appendChild: () => {}, removeChild: () => {} },
+  };
+
+  const files = [
+    {
+      id: "doc-1",
+      title: "Installation Guide",
+      relpath: "install.html",
+      src: "install.html",
+      type: "html",
+    },
+    {
+      id: "doc-pdf",
+      title: "Manual",
+      relpath: "manual.pdf",
+      src: "manual.pdf",
+      type: "pdf",
+    },
+  ];
+  shell.setManifest({ files });
+  shell._setEnv(mockDocument, mockWindow);
+
+  // Activate result for HTML document
+  shell.activateResult("doc-1", ["installation", "guide"], "installation guide");
+
+  // Allow clipboard promise to resolve
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.strictEqual(copiedText, "installation guide");
+  assert.strictEqual(searchInput.value, "");
+  assert.strictEqual(searchResults.classes.has("open"), false);
+  assert.ok(contentFrame.src.includes("install.html?hl=installation+guide"));
+  assert.ok(toast.classes.has("show"));
+  assert.ok(
+    toast.innerHTML.includes(
+      'Copied "<strong>installation guide</strong>" to clipboard',
+    ),
+  );
+  assert.ok(toast.innerHTML.includes("<kbd>Ctrl+F</kbd>"));
+
+  // Mac platform test for ⌘F shortcut
+  mockWindow.navigator.platform = "MacIntel";
+  shell.activateResult("doc-pdf", ["manual"], "manual");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.strictEqual(copiedText, "manual");
+  assert.ok(contentFrame.src.includes("manual.pdf#search=manual"));
+  assert.ok(toast.innerHTML.includes("<kbd>⌘F</kbd>"));
+});
+
