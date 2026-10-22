@@ -99,8 +99,11 @@ mark.search-hit {
 
 mark.search-hit-active {
   background-color: #fbbf24;
-  outline: 2px solid #d97706;
+  outline: 2px solid #2563eb;
   outline-offset: 1px;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 4px #2563eb;
 }
 
 html.reader-dark mark.search-hit {
@@ -110,8 +113,11 @@ html.reader-dark mark.search-hit {
 
 html.reader-dark mark.search-hit-active {
   background-color: #b45309;
-  outline: 2px solid #f59e0b;
+  outline: 2px solid #60a5fa;
   outline-offset: 1px;
+  box-shadow:
+    0 0 0 2px #1a1a1a,
+    0 0 0 4px #60a5fa;
   color: #ffffff;
 }
 

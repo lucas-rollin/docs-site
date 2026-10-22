@@ -307,9 +307,10 @@
   win?.addEventListener("message", (ev) => {
     if (ev.source !== win?.parent) return;
     const d = ev?.data;
-    if (d && d.type === "reader-set-dark" && doc) {
+    if (!d) return;
+    if (d.type === "reader-set-dark" && doc) {
       doc.documentElement.classList.toggle("reader-dark", !!d.value);
-    } else if (d && d.type === "clear-highlights") {
+    } else if (d.type === "clear-highlights") {
       clearHighlights();
     }
   });
