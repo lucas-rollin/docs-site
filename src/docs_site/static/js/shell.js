@@ -1,14 +1,17 @@
 (() => {
-  const MANIFEST = window.DOCS_MANIFEST || { files: [] };
+  const isNode = typeof window === "undefined";
+  const MANIFEST =
+    !isNode && window.DOCS_MANIFEST ? window.DOCS_MANIFEST : { files: [] };
 
-  const contentFrame = document.getElementById("content-frame");
-  const leftPanel = document.getElementById("left-panel");
-  const tocBody = document.getElementById("toc-body");
-  const searchInput = document.getElementById("search-input");
-  const searchResults = document.getElementById("search-results");
-  const darkToggle = document.getElementById("dark-toggle");
-  const copyPageBtn = document.getElementById("copy-page-btn");
-  const copyToast = document.getElementById("copy-toast");
+  const doc = typeof document !== "undefined" ? document : null;
+  const contentFrame = doc?.getElementById("content-frame");
+  const leftPanel = doc?.getElementById("left-panel");
+  const tocBody = doc?.getElementById("toc-body");
+  const searchInput = doc?.getElementById("search-input");
+  const searchResults = doc?.getElementById("search-results");
+  const darkToggle = doc?.getElementById("dark-toggle");
+  const copyPageBtn = doc?.getElementById("copy-page-btn");
+  const copyToast = doc?.getElementById("copy-toast");
 
   let currentFileId = null;
   let darkMode = false;
@@ -59,6 +62,7 @@
   // --- File list (left sidebar) -------------------------------------------
 
   function renderFileList() {
+    if (!leftPanel) return;
     const groups = {};
     for (const f of MANIFEST.files) {
       const dir = f.relpath.includes("/")
@@ -91,6 +95,7 @@
   // --- Table of contents (right sidebar) ----------------------------------
 
   function renderToc(file) {
+    if (!tocBody) return;
     if (!file?.headings || file.headings.length === 0) {
       tocBody.className = "toc-empty";
       tocBody.textContent =
@@ -124,22 +129,28 @@
   }
 
   let activeHighlight = [];
+  let activeHighlightQuery = "";
 
   function contentUrl(file, hash) {
     let url = file.src;
+    const highlightParam =
+      activeHighlightQuery ||
+      (activeHighlight && activeHighlight.length > 0
+        ? activeHighlight.join(" ")
+        : "");
     if (isHtmlPage(file)) {
       const params = new URLSearchParams();
       if (darkMode) params.set("dark", "1");
-      if (activeHighlight && activeHighlight.length > 0) {
-        params.set("hl", activeHighlight.join(" "));
+      if (highlightParam) {
+        params.set("hl", highlightParam);
       }
       const qs = params.toString();
       if (qs) url += `?${qs}`;
       if (hash) url += hash.startsWith("#") ? hash : `#${hash}`;
     } else if (file.type === "pdf") {
       let combinedHash = hash || "";
-      if (activeHighlight && activeHighlight.length > 0) {
-        const searchParam = `search=${encodeURIComponent(activeHighlight.join(" "))}`;
+      if (highlightParam) {
+        const searchParam = `search=${encodeURIComponent(highlightParam)}`;
         if (combinedHash) {
           const stripped = combinedHash.startsWith("#")
             ? combinedHash.slice(1)
@@ -158,32 +169,36 @@
     return url;
   }
 
-  function selectFile(id, hash, terms) {
+  function selectFile(id, hash, terms, hlQuery) {
     const file = fileById(id);
     if (!file) return;
     if (terms !== undefined) {
       activeHighlight = terms || [];
+      activeHighlightQuery = hlQuery || "";
     } else if (id !== currentFileId) {
       activeHighlight = [];
+      activeHighlightQuery = "";
     }
     currentFileId = id;
     if (copyPageBtn) {
       copyPageBtn.disabled = false;
     }
-    contentFrame.src = contentUrl(file, hash);
+    if (contentFrame) {
+      contentFrame.src = contentUrl(file, hash);
+    }
     renderFileList();
     renderToc(file);
   }
 
   function jumpTo(hash) {
     const file = fileById(currentFileId);
-    if (!file) return;
+    if (!file || !contentFrame) return;
     contentFrame.src = contentUrl(file, hash);
   }
 
   // Once the frame finishes loading, hand it keyboard focus so the very next
   // Ctrl+F targets the document itself instead of the shell page, and synchronize dark mode.
-  contentFrame.addEventListener("load", () => {
+  contentFrame?.addEventListener("load", () => {
     try {
       contentFrame.contentWindow?.focus();
       const file = fileById(currentFileId);
@@ -227,37 +242,42 @@
     return Promise.resolve(legacyCopy(text));
   }
 
-  function activateResult(id, terms) {
-    selectFile(id, null, terms);
-    searchResults.classList.remove("open");
-    searchInput.value = "";
+  function activateResult(id, terms, hlQuery) {
+    selectFile(id, null, terms, hlQuery);
+    searchResults?.classList.remove("open");
+    if (searchInput) searchInput.value = "";
   }
 
   // --- Search indexing (MiniSearch) ----------------------------------------
 
   let miniSearch = null;
-  if (typeof MiniSearch !== "undefined") {
-    miniSearch = new MiniSearch({
-      fields: ["title", "headings", "text"],
-      storeFields: ["id"],
-      searchOptions: {
-        boost: { title: 5, headings: 2, text: 1 },
-      },
-      processTerm: (term) =>
-        term
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase(),
-    });
-    miniSearch.addAll(
-      MANIFEST.files.map((f) => ({
-        id: f.id,
-        title: f.title || "",
-        headings: (f.headings || []).map((h) => h.text).join(" "),
-        text: f.text || "",
-      })),
-    );
+
+  function initMiniSearch(files) {
+    if (typeof MiniSearch !== "undefined") {
+      miniSearch = new MiniSearch({
+        fields: ["title", "headings", "text"],
+        storeFields: ["id"],
+        searchOptions: {
+          boost: { title: 5, headings: 2, text: 1 },
+        },
+        processTerm: (term) =>
+          term
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase(),
+      });
+      miniSearch.addAll(
+        (files || MANIFEST.files).map((f) => ({
+          id: f.id,
+          title: f.title || "",
+          headings: (f.headings || []).map((h) => h.text).join(" "),
+          text: f.text || "",
+        })),
+      );
+    }
   }
+
+  initMiniSearch();
 
   // --- Search results list, keyboard-navigable -----------------------------
 
@@ -272,6 +292,47 @@
     return Boolean(ch && /[\p{L}\p{N}]/u.test(ch));
   }
 
+  function makePhraseRegex(phrase) {
+    const tokens = normalizeText(phrase)
+      .split(/[\s\p{P}]+/u)
+      .filter(Boolean);
+    if (tokens.length === 0) return null;
+    const escaped = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    return new RegExp(
+      `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
+      "u",
+    );
+  }
+
+  function hasExactPhrase(file, phrase) {
+    if (!file || !phrase) return false;
+    const re = makePhraseRegex(phrase);
+    if (!re) return false;
+    if (file.title && re.test(normalizeText(file.title))) return true;
+    if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
+      return true;
+    }
+    if (file.text && re.test(normalizeText(file.text))) return true;
+    return false;
+  }
+
+  function scorePhraseMatch(file, phrase) {
+    if (!file || !phrase) return 0;
+    const re = makePhraseRegex(phrase);
+    if (!re) return 0;
+    let boost = 0;
+    if (file.title && re.test(normalizeText(file.title))) {
+      boost += 100;
+    }
+    if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
+      boost += 50;
+    }
+    if (file.text && re.test(normalizeText(file.text))) {
+      boost += 25;
+    }
+    return boost;
+  }
+
   function findWordRanges(text, terms) {
     if (!text || !terms || terms.length === 0) return [];
     const norm = normalizeText(text);
@@ -282,15 +343,36 @@
       const cleanTerm = normalizeText(term).trim();
       if (!cleanTerm) continue;
 
-      let pos = 0;
-      while (true) {
-        pos = norm.indexOf(cleanTerm, pos);
-        if (pos === -1) break;
-        const atWordStart = pos === 0 || !isWordChar(norm[pos - 1]);
-        if (atWordStart) {
-          ranges.push([pos, pos + cleanTerm.length]);
+      if (/\s/.test(cleanTerm)) {
+        const tokens = cleanTerm.split(/\s+/).filter(Boolean);
+        const escaped = tokens.map((t) =>
+          t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        );
+        const re = new RegExp(
+          `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
+          "gu",
+        );
+        let m = re.exec(norm);
+        while (m !== null) {
+          ranges.push([m.index, m.index + m[0].length]);
+          m = re.exec(norm);
         }
-        pos += cleanTerm.length;
+      } else {
+        let pos = 0;
+        while (true) {
+          pos = norm.indexOf(cleanTerm, pos);
+          if (pos === -1) break;
+          const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+          const atEnd =
+            pos + cleanTerm.length >= norm.length ||
+            !isWordChar(norm[pos + cleanTerm.length]);
+          if (atStart && atEnd) {
+            ranges.push([pos, pos + cleanTerm.length]);
+            pos += cleanTerm.length;
+          } else {
+            pos += 1;
+          }
+        }
       }
     }
     return ranges;
@@ -381,19 +463,46 @@
       const cleanTerm = normalizeText(term).trim();
       if (!cleanTerm) continue;
 
-      let pos = 0;
-      while (true) {
-        pos = norm.indexOf(cleanTerm, pos);
-        if (pos === -1) break;
-        const atWordStart = pos === 0 || !isWordChar(norm[pos - 1]);
-        if (atWordStart) {
+      if (/\s/.test(cleanTerm)) {
+        const tokens = cleanTerm.split(/\s+/).filter(Boolean);
+        const escaped = tokens.map((t) =>
+          t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        );
+        const re = new RegExp(
+          `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
+          "gu",
+        );
+        let m = re.exec(norm);
+        while (m !== null) {
           matches.push({
-            start: pos,
-            end: pos + cleanTerm.length,
+            start: m.index,
+            end: m.index + m[0].length,
             term: cleanTerm,
+            isPhrase: true,
           });
+          m = re.exec(norm);
         }
-        pos += cleanTerm.length;
+      } else {
+        let pos = 0;
+        while (true) {
+          pos = norm.indexOf(cleanTerm, pos);
+          if (pos === -1) break;
+          const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+          const atEnd =
+            pos + cleanTerm.length >= norm.length ||
+            !isWordChar(norm[pos + cleanTerm.length]);
+          if (atStart && atEnd) {
+            matches.push({
+              start: pos,
+              end: pos + cleanTerm.length,
+              term: cleanTerm,
+              isPhrase: false,
+            });
+            pos += cleanTerm.length;
+          } else {
+            pos += 1;
+          }
+        }
       }
     }
 
@@ -413,11 +522,13 @@
       const winEnd = winStart + maxLength;
       const coveredTerms = new Set();
       let count = 0;
+      let hasPhrase = false;
       for (let j = i; j < matches.length && matches[j].start < winEnd; j++) {
         coveredTerms.add(matches[j].term);
         count++;
+        if (matches[j].isPhrase) hasPhrase = true;
       }
-      const score = coveredTerms.size * 100 + count;
+      const score = coveredTerms.size * 100 + count + (hasPhrase ? 500 : 0);
       if (score > bestScore) {
         bestScore = score;
         bestMatchIdx = i;
@@ -435,7 +546,7 @@
   }
 
   function resultButtons() {
-    return Array.from(searchResults.querySelectorAll(".search-result"));
+    return Array.from(searchResults?.querySelectorAll(".search-result") || []);
   }
 
   function focusResult(index) {
@@ -446,19 +557,73 @@
   }
 
   function closeResults() {
-    searchResults.classList.remove("open");
+    searchResults?.classList.remove("open");
   }
 
-  function runSearch(rawQuery) {
-    const query = rawQuery.trim();
-    lastQuery = query;
+  function parseSearchQuery(rawQuery) {
+    const query = (rawQuery || "").trim();
     if (!query) {
-      closeResults();
-      searchResults.innerHTML = "";
-      return;
+      return {
+        query: "",
+        exactPhrases: [],
+        unquotedTokens: [],
+        allTerms: [],
+        contiguousPhrases: [],
+      };
     }
 
-    const queryTokens = query.split(/[\s\p{P}]+/u).filter((t) => t.length > 0);
+    const exactPhrases = [];
+    const phraseRegex = /"([^"]+)"|'([^']+)'/g;
+    let remaining = query.replace(phraseRegex, (_match, p1, p2) => {
+      const phrase = (p1 || p2).trim();
+      if (phrase) {
+        exactPhrases.push(phrase);
+      }
+      return " ";
+    });
+
+    const unclosedMatch = remaining.match(/["']([^"']+)$/);
+    if (unclosedMatch?.[1].trim()) {
+      exactPhrases.push(unclosedMatch[1].trim());
+      remaining = remaining.slice(0, unclosedMatch.index);
+    }
+
+    const unquotedTokens = remaining
+      .split(/[\s\p{P}]+/u)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const phraseTokens = [];
+    for (const ph of exactPhrases) {
+      const tokens = ph
+        .split(/[\s\p{P}]+/u)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      phraseTokens.push(...tokens);
+    }
+
+    const allTerms = Array.from(new Set([...unquotedTokens, ...phraseTokens]));
+
+    const contiguousPhrases = [...exactPhrases];
+    if (contiguousPhrases.length === 0 && unquotedTokens.length > 1) {
+      contiguousPhrases.push(unquotedTokens.join(" "));
+    }
+
+    return {
+      query,
+      exactPhrases,
+      unquotedTokens,
+      allTerms,
+      contiguousPhrases,
+    };
+  }
+
+  function searchDocuments(rawQuery) {
+    const query = (rawQuery || "").trim();
+    if (!query) return [];
+
+    const parsed = parseSearchQuery(query);
+    if (parsed.allTerms.length === 0) return [];
 
     let hits = [];
     if (miniSearch) {
@@ -467,40 +632,103 @@
         prefix: (_term, index, terms) => index === terms.length - 1,
         combineWith: "AND",
       };
-      hits = miniSearch.search(query, searchOptions);
-      if (hits.length === 0) {
-        hits = miniSearch.search(query, {
-          ...searchOptions,
-          combineWith: "OR",
+      hits = miniSearch.search(parsed.allTerms.join(" "), searchOptions);
+
+      if (parsed.exactPhrases.length > 0) {
+        hits = hits.filter((h) => {
+          const file = fileById(h.id);
+          return parsed.exactPhrases.every((phrase) =>
+            hasExactPhrase(file, phrase),
+          );
         });
       }
     } else {
-      const q = query.toLowerCase();
       for (const f of MANIFEST.files) {
-        const titleHit = f.title.toLowerCase().includes(q);
-        const textHit = f.text.toLowerCase().includes(q);
-        if (titleHit || textHit) {
-          hits.push({ id: f.id, score: titleHit ? 5 : 1, terms: [q] });
+        const titleNorm = normalizeText(f.title);
+        const textNorm = normalizeText(f.text);
+        const headingsNorm = (f.headings || [])
+          .map((h) => normalizeText(h.text))
+          .join(" ");
+        const allDocNorm = `${titleNorm} ${headingsNorm} ${textNorm}`;
+
+        const allMatched = parsed.allTerms.every((term) => {
+          const re = makePhraseRegex(term);
+          return re ? re.test(allDocNorm) : false;
+        });
+
+        if (!allMatched) continue;
+
+        if (parsed.exactPhrases.length > 0) {
+          const exactMatched = parsed.exactPhrases.every((phrase) =>
+            hasExactPhrase(f, phrase),
+          );
+          if (!exactMatched) continue;
         }
+
+        let score = 1;
+        for (const term of parsed.allTerms) {
+          const re = makePhraseRegex(term);
+          if (re?.test(titleNorm)) score += 5;
+          else if (re?.test(headingsNorm)) score += 2;
+        }
+
+        hits.push({ id: f.id, score, terms: parsed.allTerms });
       }
-      hits.sort((a, b) => b.score - a.score);
     }
 
+    if (parsed.contiguousPhrases.length > 0) {
+      for (const hit of hits) {
+        const file = fileById(hit.id);
+        if (!file) continue;
+        for (const phrase of parsed.contiguousPhrases) {
+          hit.score += scorePhraseMatch(file, phrase);
+        }
+      }
+    }
+
+    hits.sort((a, b) => b.score - a.score);
+    return hits;
+  }
+
+  function runSearch(rawQuery) {
+    const query = rawQuery.trim();
+    lastQuery = query;
+    if (!query) {
+      closeResults();
+      if (searchResults) searchResults.innerHTML = "";
+      return;
+    }
+
+    const parsed = parseSearchQuery(query);
+    if (parsed.allTerms.length === 0) {
+      closeResults();
+      if (searchResults) searchResults.innerHTML = "";
+      return;
+    }
+
+    const hits = searchDocuments(query);
     const top = hits.slice(0, 20);
 
+    if (!searchResults) return;
+
     if (top.length === 0) {
-      searchResults.innerHTML = '<div class="search-empty">No matches</div>';
+      const emptyMsg =
+        parsed.allTerms.length > 1 || parsed.exactPhrases.length > 0
+          ? "No documents contain all terms"
+          : "No matches";
+      searchResults.innerHTML = `<div class="search-empty">${escapeHtml(emptyMsg)}</div>`;
     } else {
       searchResults.innerHTML = top
         .map((r) => {
           const file = fileById(r.id);
           if (!file) return "";
-          const matchTerms = Array.from(
-            new Set([...queryTokens, ...(r.terms || [])]),
-          );
+          const matchTerms = [
+            ...parsed.contiguousPhrases,
+            ...Array.from(new Set([...parsed.allTerms, ...(r.terms || [])])),
+          ];
           const snippet = extractSnippet(file, matchTerms);
           return `
-        <button type="button" class="search-result" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}">
+        <button type="button" class="search-result" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}" data-hl="${escapeHtml(query)}">
           <span class="sr-title"><span class="type-icon">${iconFor(file.type)}</span>${highlightTerms(file.title, matchTerms)}</span>
           <span class="sr-snippet">${highlightTerms(snippet, matchTerms)}</span>
         </button>
@@ -517,7 +745,7 @@
           } catch (_e) {
             terms = [];
           }
-          activateResult(btn.dataset.id, terms);
+          activateResult(btn.dataset.id, terms, btn.dataset.hl);
         });
         btn.addEventListener("keydown", (e) => {
           if (e.key === "ArrowDown") {
@@ -526,13 +754,13 @@
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             if (index === 0) {
-              searchInput.focus();
+              searchInput?.focus();
             } else {
               focusResult(index - 1);
             }
           } else if (e.key === "Escape") {
             closeResults();
-            searchInput.focus();
+            searchInput?.focus();
           }
           // Enter / Space fall through to the native <button> click.
         });
@@ -551,24 +779,24 @@
 
   const debouncedSearch = debounce((val) => runSearch(val), 120);
 
-  searchInput.addEventListener("input", (e) => {
+  searchInput?.addEventListener("input", (e) => {
     debouncedSearch(e.target.value);
   });
 
-  searchInput.addEventListener("keydown", (e) => {
+  searchInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       clearTimeout(debounceTimer);
       if (searchInput.value.trim() !== lastQuery) {
         runSearch(searchInput.value);
       }
-      const first = searchResults.querySelector(".search-result");
+      const first = searchResults?.querySelector(".search-result");
       if (first) {
         e.preventDefault();
         first.click();
       }
       return;
     }
-    if (!searchResults.classList.contains("open")) return;
+    if (!searchResults?.classList.contains("open")) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       focusResult(0);
@@ -577,21 +805,22 @@
     }
   });
 
-  document.addEventListener("click", (e) => {
+  doc?.addEventListener("click", (e) => {
     if (!e.target.closest(".search-wrap")) closeResults();
   });
 
   // --- Dark mode -------------------------------------------------------------
 
   function updateDarkToggleUI() {
+    if (!darkToggle) return;
     darkToggle.innerHTML = darkMode
       ? `${ICONS.sun}<span>Light</span>`
       : `${ICONS.moon}<span>Dark</span>`;
   }
 
-  darkToggle.addEventListener("click", () => {
+  darkToggle?.addEventListener("click", () => {
     darkMode = !darkMode;
-    document.documentElement.classList.toggle("reader-dark", darkMode);
+    doc?.documentElement.classList.toggle("reader-dark", darkMode);
     updateDarkToggleUI();
     try {
       localStorage.setItem("docs-site-dark", darkMode ? "1" : "0");
@@ -600,7 +829,7 @@
     }
 
     const file = fileById(currentFileId);
-    if ((!file || isHtmlPage(file)) && contentFrame.contentWindow) {
+    if ((!file || isHtmlPage(file)) && contentFrame?.contentWindow) {
       try {
         contentFrame.contentWindow.postMessage(
           { type: "reader-set-dark", value: darkMode },
@@ -621,7 +850,7 @@
     }
     if (saved === "1") {
       darkMode = true;
-      document.documentElement.classList.add("reader-dark");
+      doc?.documentElement.classList.add("reader-dark");
       updateDarkToggleUI();
       if (
         !currentFileId &&
@@ -633,19 +862,38 @@
     }
   })();
 
-  if (copyPageBtn) {
-    copyPageBtn.addEventListener("click", () => {
-      const file = fileById(currentFileId);
-      if (!file) {
-        showToast("No page selected to copy");
-        return;
-      }
-      const title = file.title || file.relpath;
-      copyToClipboard(file.text || "").then(() => {
-        showToast(`Copied <strong>${escapeHtml(title)}</strong> as Markdown`);
-      });
+  copyPageBtn?.addEventListener("click", () => {
+    const file = fileById(currentFileId);
+    if (!file) {
+      showToast("No page selected to copy");
+      return;
+    }
+    const title = file.title || file.relpath;
+    copyToClipboard(file.text || "").then(() => {
+      showToast(`Copied <strong>${escapeHtml(title)}</strong> as Markdown`);
     });
-  }
+  });
 
-  renderFileList();
+  if (leftPanel) renderFileList();
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      isWordChar,
+      normalizeText,
+      makePhraseRegex,
+      parseSearchQuery,
+      findWordRanges,
+      highlightTerms,
+      extractSnippet,
+      searchDocuments,
+      runSearch,
+      hasExactPhrase,
+      scorePhraseMatch,
+      initMiniSearch,
+      setManifest: (m) => {
+        MANIFEST.files = m.files || [];
+      },
+      fileById,
+    };
+  }
 })();
