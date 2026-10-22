@@ -3,11 +3,16 @@
 Thank you for helping improve `docs-site`! This guide covers local setup, testing, code quality checks, and an overview of the project's architecture.
 
 ## Table of Contents
-- [Prerequisites](#prerequisites)
-- [Local Development Setup](#local-development-setup)
-- [Testing & Verification](#testing--verification)
-- [Linting & Formatting](#linting--formatting)
-- [Architecture Overview](#architecture-overview)
+- [Contributing to docs-site](#contributing-to-docs-site)
+  - [Table of Contents](#table-of-contents)
+  - [Prerequisites](#prerequisites)
+  - [Local Development Setup](#local-development-setup)
+  - [Testing \& Verification](#testing--verification)
+  - [Linting \& Formatting](#linting--formatting)
+    - [Run Lint Checks](#run-lint-checks)
+    - [Apply Automatic Formatting](#apply-automatic-formatting)
+  - [Architecture Overview](#architecture-overview)
+    - [Subsystem Breakdown](#subsystem-breakdown)
 
 ## Prerequisites
 
@@ -38,8 +43,11 @@ Run type checks and unit tests to verify your changes:
 # Static type checking
 uv run mypy src/docs_site
 
-# Test suite
+# Python test suite
 uv run pytest
+
+# JavaScript test suite
+npm test
 ```
 
 ## Linting & Formatting
