@@ -3,15 +3,16 @@
   const MANIFEST =
     !isNode && window.DOCS_MANIFEST ? window.DOCS_MANIFEST : { files: [] };
 
-  const doc = typeof document !== "undefined" ? document : null;
-  const contentFrame = doc?.getElementById("content-frame");
-  const leftPanel = doc?.getElementById("left-panel");
-  const tocBody = doc?.getElementById("toc-body");
-  const searchInput = doc?.getElementById("search-input");
-  const searchResults = doc?.getElementById("search-results");
-  const darkToggle = doc?.getElementById("dark-toggle");
-  const copyPageBtn = doc?.getElementById("copy-page-btn");
-  const copyToast = doc?.getElementById("copy-toast");
+  let doc = typeof document !== "undefined" ? document : null;
+  let win = typeof window !== "undefined" ? window : null;
+  let contentFrame = doc?.getElementById("content-frame");
+  let leftPanel = doc?.getElementById("left-panel");
+  let tocBody = doc?.getElementById("toc-body");
+  let searchInput = doc?.getElementById("search-input");
+  let searchResults = doc?.getElementById("search-results");
+  let darkToggle = doc?.getElementById("dark-toggle");
+  let copyPageBtn = doc?.getElementById("copy-page-btn");
+  let copyToast = doc?.getElementById("copy-toast");
 
   let currentFileId = null;
   let darkMode = false;
@@ -217,24 +218,34 @@
 
   function legacyCopy(text) {
     try {
-      const ta = document.createElement("textarea");
+      const documentObj =
+        doc || (typeof document !== "undefined" ? document : null);
+      if (!documentObj) return false;
+      const ta = documentObj.createElement("textarea");
       ta.value = text;
       ta.style.position = "fixed";
       ta.style.opacity = "0";
-      document.body.appendChild(ta);
+      documentObj.body.appendChild(ta);
       ta.focus();
       ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
+      const ok = documentObj.execCommand("copy");
+      documentObj.body.removeChild(ta);
       return ok;
     } catch (_e) {
       return false;
     }
   }
 
+  function getNavigator() {
+    return (
+      win?.navigator || (typeof navigator !== "undefined" ? navigator : null)
+    );
+  }
+
   function copyToClipboard(text) {
-    if (navigator.clipboard?.writeText) {
-      return navigator.clipboard
+    const nav = getNavigator();
+    if (nav?.clipboard?.writeText) {
+      return nav.clipboard
         .writeText(text)
         .then(() => true)
         .catch(() => legacyCopy(text));
@@ -246,6 +257,18 @@
     selectFile(id, null, terms, hlQuery);
     searchResults?.classList.remove("open");
     if (searchInput) searchInput.value = "";
+    const queryToCopy =
+      hlQuery || (terms && terms.length > 0 ? terms.join(" ") : "");
+    if (queryToCopy) {
+      copyToClipboard(queryToCopy).then(() => {
+        const nav = getNavigator();
+        const isMac = /mac/i.test(nav?.platform || "");
+        const shortcut = isMac ? "⌘F" : "Ctrl+F";
+        showToast(
+          `Copied "<strong>${escapeHtml(queryToCopy)}</strong>" to clipboard — press <kbd>${shortcut}</kbd> to find in page`,
+        );
+      });
+    }
   }
 
   // --- Search indexing (MiniSearch) ----------------------------------------
@@ -876,6 +899,19 @@
 
   if (leftPanel) renderFileList();
 
+  function _setEnv(d, w) {
+    doc = d;
+    win = w;
+    contentFrame = doc?.getElementById("content-frame") || null;
+    leftPanel = doc?.getElementById("left-panel") || null;
+    tocBody = doc?.getElementById("toc-body") || null;
+    searchInput = doc?.getElementById("search-input") || null;
+    searchResults = doc?.getElementById("search-results") || null;
+    darkToggle = doc?.getElementById("dark-toggle") || null;
+    copyPageBtn = doc?.getElementById("copy-page-btn") || null;
+    copyToast = doc?.getElementById("copy-toast") || null;
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       isWordChar,
@@ -894,6 +930,9 @@
         MANIFEST.files = m.files || [];
       },
       fileById,
+      activateResult,
+      copyToClipboard,
+      _setEnv,
     };
   }
 })();
