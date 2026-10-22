@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.5.14"
   }
