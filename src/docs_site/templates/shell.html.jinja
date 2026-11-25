@@ -2,11 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ site_title | e }} — Docs</title>
     <link rel="stylesheet" href="static/css/shell.css">
   </head>
   <body>
     <header>
+      <button id="nav-toggle-btn"
+              type="button"
+              aria-label="Toggle file navigation"
+              aria-controls="left-panel"
+              aria-expanded="false"
+              title="Files">
+        <svg class="icon"
+             viewBox="0 0 24 24"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
       <div class="site-title">{{ site_title | e }}</div>
       <div class="search-wrap">
         <input id="search-input"
@@ -14,6 +33,34 @@
                placeholder="Search all files…"
                autocomplete="off">
         <div id="search-results" role="listbox"></div>
+      </div>
+      <div class="toc-dropdown-wrap">
+        <button id="toc-toggle-btn"
+                type="button"
+                aria-label="On this page"
+                aria-controls="toc-popover"
+                aria-expanded="false"
+                title="On this page">
+          <svg class="icon"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               stroke-width="2"
+               stroke-linecap="round"
+               stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+          <span class="toc-btn-label">On this page</span>
+        </button>
+        <div id="toc-popover" role="region" aria-label="On this page">
+          <div class="panel-heading">On this page</div>
+          <div id="toc-popover-body" class="toc-empty">Select a file to see its contents.</div>
+        </div>
       </div>
       <button id="copy-page-btn"
               type="button"
@@ -32,7 +79,10 @@
         </svg>
         <span>Copy Page</span>
       </button>
-      <button id="dark-toggle" type="button" aria-label="Toggle dark mode">
+      <button id="dark-toggle"
+              type="button"
+              title="Toggle dark mode"
+              aria-label="Toggle dark mode">
         <svg class="icon icon-moon"
              viewBox="0 0 24 24"
              fill="none"
@@ -45,7 +95,8 @@
         <span>Dark</span>
       </button>
     </header>
-    <nav id="left-panel">
+    <div id="drawer-backdrop" aria-hidden="true"></div>
+    <nav id="left-panel" aria-label="Document navigation">
     </nav>
     <main>
       <iframe id="content-frame"

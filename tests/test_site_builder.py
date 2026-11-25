@@ -188,3 +188,29 @@ def test_manifest_title_source_modes(tmp_path: Path) -> None:
             fn_pages,
             title_source="invalid",  # type: ignore[arg-type]
         )
+
+
+def test_responsive_layout_assets(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    (src_dir / "doc.md").write_text("# Doc\n\n## Section", encoding="utf-8")
+    out_dir = tmp_path / "_site"
+
+    build_site(src_dir, out_dir, site_title="Responsive")
+
+    index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+    assert 'name="viewport"' in index_html
+    assert 'id="nav-toggle-btn"' in index_html
+    assert 'id="toc-toggle-btn"' in index_html
+    assert 'id="toc-popover"' in index_html
+    assert 'id="drawer-backdrop"' in index_html
+
+    shell_css = (out_dir / "static" / "css" / "shell.css").read_text(encoding="utf-8")
+    assert "100dvh" in shell_css
+    assert "260px minmax(500px, 1fr) 280px" in shell_css
+    assert "@media (max-width: 1149px)" in shell_css
+    assert "@media (max-width: 849px)" in shell_css
+    assert "@media (max-width: 767px)" in shell_css
+    assert "@media (max-width: 639px)" in shell_css
+    assert ".toc-dropdown-wrap" in shell_css
+    assert "width: auto;" in shell_css

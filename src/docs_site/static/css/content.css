@@ -138,3 +138,10 @@ html.reader-dark mark.search-hit-active {
     box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
   }
 }
+
+@media (max-width: 600px) {
+  body {
+    padding: 1.25rem 1rem 4rem;
+    font-size: 16px;
+  }
+}

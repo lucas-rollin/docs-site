@@ -7,7 +7,12 @@
   let win = typeof window !== "undefined" ? window : null;
   let contentFrame = doc?.getElementById("content-frame");
   let leftPanel = doc?.getElementById("left-panel");
+  let drawerBackdrop = doc?.getElementById("drawer-backdrop");
+  let navToggleBtn = doc?.getElementById("nav-toggle-btn");
   let tocBody = doc?.getElementById("toc-body");
+  let tocToggleBtn = doc?.getElementById("toc-toggle-btn");
+  let tocPopover = doc?.getElementById("toc-popover");
+  let tocPopoverBody = doc?.getElementById("toc-popover-body");
   let searchInput = doc?.getElementById("search-input");
   let searchResults = doc?.getElementById("search-results");
   let darkToggle = doc?.getElementById("dark-toggle");
@@ -114,13 +119,48 @@
     });
   }
 
-  // --- Table of contents (right sidebar) ----------------------------------
+  // --- Responsive drawer & TOC popover ------------------------------------
 
-  function renderToc(file) {
-    if (!tocBody) return;
+  function setNavDrawerOpen(open) {
+    const isOpen = Boolean(open);
+    leftPanel?.classList.toggle("open", isOpen);
+    drawerBackdrop?.classList.toggle("open", isOpen);
+    navToggleBtn?.setAttribute("aria-expanded", String(isOpen));
+  }
+
+  function closeNavDrawer() {
+    setNavDrawerOpen(false);
+  }
+
+  function toggleNavDrawer() {
+    const isOpen = Boolean(leftPanel?.classList.contains("open"));
+    if (!isOpen) closeTocPopover();
+    setNavDrawerOpen(!isOpen);
+  }
+
+  function setTocPopoverOpen(open) {
+    const isOpen = Boolean(open);
+    tocPopover?.classList.toggle("open", isOpen);
+    tocToggleBtn?.setAttribute("aria-expanded", String(isOpen));
+  }
+
+  function closeTocPopover() {
+    setTocPopoverOpen(false);
+  }
+
+  function toggleTocPopover() {
+    const isOpen = Boolean(tocPopover?.classList.contains("open"));
+    if (!isOpen) closeNavDrawer();
+    setTocPopoverOpen(!isOpen);
+  }
+
+  // --- Table of contents (right sidebar & responsive popover) -------------
+
+  function renderTocInto(container, file, onSelect) {
+    if (!container) return;
     if (!file?.headings || file.headings.length === 0) {
-      tocBody.className = "toc-empty";
-      tocBody.textContent =
+      container.className = "toc-empty";
+      container.textContent =
         file && file.type === "pdf"
           ? "No bookmarks in this PDF."
           : "No headings found.";
@@ -134,14 +174,20 @@
       html += `<li class="toc-item" style="--indent:${indent}px"><a href="#" data-target="${escapeHtml(target)}">${escapeHtml(h.text)}</a></li>`;
     }
     html += "</ul>";
-    tocBody.className = "";
-    tocBody.innerHTML = html;
-    tocBody.querySelectorAll(".toc-item a").forEach((a) => {
+    container.className = "";
+    container.innerHTML = html;
+    container.querySelectorAll(".toc-item a").forEach((a) => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
         jumpTo(a.dataset.target);
+        onSelect?.();
       });
     });
+  }
+
+  function renderToc(file) {
+    renderTocInto(tocBody, file);
+    renderTocInto(tocPopoverBody, file, closeTocPopover);
   }
 
   // --- Content frame navigation --------------------------------------------
@@ -212,6 +258,8 @@
     }
     renderFileList();
     renderToc(file);
+    closeNavDrawer();
+    closeTocPopover();
   }
 
   function jumpTo(hash) {
@@ -955,9 +1003,31 @@
     }
   });
 
-  doc?.addEventListener("click", (e) => {
-    if (!e.target.closest(".search-wrap")) closeResults();
-  });
+  function bindResponsiveListeners() {
+    navToggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleNavDrawer();
+    });
+    drawerBackdrop?.addEventListener("click", () => {
+      closeNavDrawer();
+    });
+    tocToggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleTocPopover();
+    });
+    doc?.addEventListener("click", (e) => {
+      if (!e.target?.closest?.(".search-wrap")) closeResults();
+      if (!e.target?.closest?.(".toc-dropdown-wrap")) closeTocPopover();
+    });
+    doc?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeNavDrawer();
+        closeTocPopover();
+      }
+    });
+  }
+
+  bindResponsiveListeners();
 
   // --- Dark mode -------------------------------------------------------------
 
@@ -1032,7 +1102,12 @@
     win = w;
     contentFrame = doc?.getElementById("content-frame") || null;
     leftPanel = doc?.getElementById("left-panel") || null;
+    drawerBackdrop = doc?.getElementById("drawer-backdrop") || null;
+    navToggleBtn = doc?.getElementById("nav-toggle-btn") || null;
     tocBody = doc?.getElementById("toc-body") || null;
+    tocToggleBtn = doc?.getElementById("toc-toggle-btn") || null;
+    tocPopover = doc?.getElementById("toc-popover") || null;
+    tocPopoverBody = doc?.getElementById("toc-popover-body") || null;
     searchInput = doc?.getElementById("search-input") || null;
     searchResults = doc?.getElementById("search-results") || null;
     darkToggle = doc?.getElementById("dark-toggle") || null;
@@ -1056,6 +1131,13 @@
       scorePhraseMatch,
       initMiniSearch,
       renderFileList,
+      renderToc,
+      selectFile,
+      toggleNavDrawer,
+      closeNavDrawer,
+      toggleTocPopover,
+      closeTocPopover,
+      bindResponsiveListeners,
       setManifest: (m) => {
         MANIFEST.files = m.files || [];
       },
