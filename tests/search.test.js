@@ -271,5 +271,333 @@ test("Clipboard-assisted search transition in shell.js", async () => {
   assert.strictEqual(copiedText, "manual");
   assert.ok(contentFrame.src.includes("manual.pdf#search=manual"));
   assert.ok(toast.innerHTML.includes("<kbd>⌘F</kbd>"));
+
+  // Quoted phrase strips quotes for clipboard & PDF #search= while keeping ?hl= quoted
+  shell.activateResult(
+    "doc-1",
+    ["installation guide", "installation", "guide"],
+    '"installation guide"',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.strictEqual(copiedText, "installation guide");
+  assert.ok(
+    contentFrame.src.includes("install.html?hl=%22installation+guide%22"),
+  );
+  assert.ok(
+    toast.innerHTML.includes(
+      'Copied "<strong>installation guide</strong>" to clipboard',
+    ),
+  );
+
+  // Mixed query copies only the exact phrase for browser Ctrl+F
+  shell.activateResult(
+    "doc-1",
+    ["installation guide", "docker", "installation", "guide"],
+    'docker "installation guide"',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.strictEqual(copiedText, "installation guide");
+
+  // Quoted PDF query strips quotes from #search=
+  shell.activateResult(
+    "doc-pdf",
+    ["installation guide", "installation", "guide"],
+    '"installation guide"',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.strictEqual(copiedText, "installation guide");
+  assert.ok(contentFrame.src.includes("manual.pdf#search=installation%20guide"));
+});
+
+test("Apostrophes and contractions are not treated as quote delimiters", () => {
+  const contraction = shell.parseSearchQuery("don't");
+  assert.deepStrictEqual(contraction.exactPhrases, []);
+  assert.deepStrictEqual(contraction.unquotedTokens, ["don", "t"]);
+  assert.strictEqual(contraction.copyText, "don't");
+
+  const multiApostrophe = shell.parseSearchQuery("user's guide isn't ready");
+  assert.deepStrictEqual(multiApostrophe.exactPhrases, []);
+  assert.deepStrictEqual(multiApostrophe.unquotedTokens, [
+    "user",
+    "s",
+    "guide",
+    "isn",
+    "t",
+    "ready",
+  ]);
+
+  const quotedApostrophe = shell.parseSearchQuery('"user\'s guide"');
+  assert.deepStrictEqual(quotedApostrophe.exactPhrases, ["user's guide"]);
+  assert.strictEqual(quotedApostrophe.copyText, "user's guide");
+
+  // Highlighting parser also preserves apostrophes
+  const hlContraction = listener.parseHighlightQuery("don't");
+  assert.strictEqual(hlContraction.exactOnly, false);
+  assert.deepStrictEqual(hlContraction.tokens, ["don", "t"]);
+
+  const files = [
+    {
+      id: "doc-apostrophe",
+      title: "Permissions",
+      headings: [],
+      text: "Follow the user's guide carefully before editing settings.",
+    },
+    {
+      id: "doc-other",
+      title: "Other",
+      headings: [],
+      text: "A user may read a guide on another topic.",
+    },
+  ];
+  shell.setManifest({ files });
+  shell.initMiniSearch(files);
+
+  const hits = shell.searchDocuments('"user\'s guide"');
+  assert.strictEqual(hits.length, 1);
+  assert.strictEqual(hits[0].id, "doc-apostrophe");
+
+  const hlMatches = listener.findMatchesInText(files[0].text, ["user's guide"]);
+  assert.strictEqual(hlMatches.length, 1);
+  assert.strictEqual(
+    files[0].text.slice(hlMatches[0][0], hlMatches[0][1]),
+    "user's guide",
+  );
+});
+
+test("extractSnippetWindows clusters distinct occurrences and avoids duplicates", () => {
+  const fillerA = "alpha ".repeat(40);
+  const fillerB = "beta ".repeat(40);
+  const file = {
+    id: "doc-multi",
+    title: "Long Document",
+    headings: [],
+    text:
+      `Intro text with widget near the start and another widget ten words later. ` +
+      `${fillerA}` +
+      `Middle section mentions widget alongside target phrase here. ` +
+      `${fillerB}` +
+      `Closing section has a final widget reference at the end.`,
+  };
+
+  const windows = shell.extractSnippetWindows(file, ["widget"], 120);
+  assert.strictEqual(windows.length, 3);
+  assert.strictEqual(new Set(windows).size, 3);
+  assert.ok(windows[0].includes("widget"));
+  assert.ok(windows.some((w) => w.includes("Middle section")));
+  assert.ok(windows.some((w) => w.includes("Closing section")));
+
+  // Nearby matches in a short text collapse to a single preview window
+  const shortFile = {
+    id: "doc-short",
+    title: "Short Document",
+    headings: [],
+    text: "First widget and second widget sit in the same short sentence.",
+  };
+  const singleWindow = shell.extractSnippetWindows(shortFile, ["widget"], 160);
+  assert.strictEqual(singleWindow.length, 1);
+});
+
+test("Search result arrows and keyboard navigation cycle previews without opening file", async () => {
+  let copiedText = "";
+  const contentFrame = { src: "" };
+  const searchInput = { value: "", focused: false, focus: () => { searchInput.focused = true; } };
+  const toast = { innerHTML: "", classList: { add: () => {}, remove: () => {} } };
+
+  function makeMockResultEl(attrsHtml, bodyHtml) {
+    const listeners = {};
+    const decodeAttr = (name) => {
+      const m = attrsHtml.match(new RegExp(`${name}="([^"]*)"`));
+      return m
+        ? m[1]
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&amp;/g, "&")
+        : "";
+    };
+    const hasPager = bodyHtml.includes("sr-pager");
+    const countMatch = bodyHtml.match(/<span class="sr-count">([^<]*)<\/span>/);
+    const snippetMatch = bodyHtml.match(/<span class="sr-snippet">([\s\S]*?)<\/span>/);
+
+    const makeSubEl = (initial) => {
+      const subListeners = {};
+      return {
+        textContent: initial,
+        innerHTML: initial,
+        addEventListener: (ev, fn) => {
+          subListeners[ev] = subListeners[ev] || [];
+          subListeners[ev].push(fn);
+        },
+        dispatch: (ev, eventObj = {}) => {
+          for (const fn of subListeners[ev] || []) fn(eventObj);
+        },
+      };
+    };
+
+    const prevBtn = hasPager ? makeSubEl("‹") : null;
+    const nextBtn = hasPager ? makeSubEl("›") : null;
+    const countEl = hasPager ? makeSubEl(countMatch ? countMatch[1] : "") : null;
+    const snippetEl = makeSubEl(snippetMatch ? snippetMatch[1] : "");
+
+    return {
+      dataset: {
+        id: decodeAttr("data-id"),
+        terms: decodeAttr("data-terms"),
+        hl: decodeAttr("data-hl"),
+      },
+      focused: false,
+      focus() {
+        this.focused = true;
+      },
+      addEventListener: (ev, fn) => {
+        listeners[ev] = listeners[ev] || [];
+        listeners[ev].push(fn);
+      },
+      querySelector: (sel) => {
+        if (sel === ".sr-prev") return prevBtn;
+        if (sel === ".sr-next") return nextBtn;
+        if (sel === ".sr-count") return countEl;
+        if (sel === ".sr-snippet") return snippetEl;
+        return null;
+      },
+      dispatch: (ev, eventObj = {}) => {
+        for (const fn of listeners[ev] || []) fn(eventObj);
+      },
+    };
+  }
+
+  let parsedResults = [];
+  const searchResults = {
+    _html: "",
+    classes: new Set(),
+    classList: {
+      add: (c) => searchResults.classes.add(c),
+      remove: (c) => searchResults.classes.delete(c),
+      contains: (c) => searchResults.classes.has(c),
+    },
+    set innerHTML(val) {
+      this._html = val;
+      parsedResults = [];
+      const re = /<div class="search-result"([^>]*)>([\s\S]*?)<\/div>/g;
+      let m = re.exec(val);
+      while (m !== null) {
+        parsedResults.push(makeMockResultEl(m[1], m[2]));
+        m = re.exec(val);
+      }
+    },
+    get innerHTML() {
+      return this._html;
+    },
+    querySelectorAll: (sel) => (sel === ".search-result" ? parsedResults : []),
+    querySelector: (sel) => (sel === ".search-result" ? parsedResults[0] || null : null),
+  };
+
+  const mockDocument = {
+    getElementById: (id) => {
+      if (id === "search-results") return searchResults;
+      if (id === "search-input") return searchInput;
+      if (id === "content-frame") return contentFrame;
+      if (id === "copy-toast") return toast;
+      return null;
+    },
+    createElement: () => ({ style: {}, focus: () => {}, select: () => {} }),
+    body: { appendChild: () => {}, removeChild: () => {} },
+  };
+  const mockWindow = {
+    navigator: {
+      clipboard: {
+        writeText: async (text) => {
+          copiedText = text;
+          return true;
+        },
+      },
+      platform: "Linux x86_64",
+    },
+  };
+
+  const files = [
+    {
+      id: "doc-multi",
+      title: "Multi Match",
+      relpath: "multi.html",
+      src: "multi.html",
+      type: "html",
+      headings: [],
+      text:
+        `First paragraph mentions exact phrase here. ` +
+        `${"padding ".repeat(35)}` +
+        `Second section also mentions exact phrase near the middle. ` +
+        `${"padding ".repeat(35)}` +
+        `Third section ends with exact phrase too.`,
+    },
+    {
+      id: "doc-single",
+      title: "Single Match",
+      relpath: "single.html",
+      src: "single.html",
+      type: "html",
+      headings: [],
+      text: "Only one occurrence of exact phrase exists here.",
+    },
+  ];
+
+  shell.setManifest({ files });
+  shell.initMiniSearch(files);
+  shell._setEnv(mockDocument, mockWindow);
+
+  shell.runSearch('"exact phrase"');
+  assert.strictEqual(parsedResults.length, 2);
+
+  // Multi-match result has pager; single-match result does not
+  const multiEl = parsedResults[0];
+  const singleEl = parsedResults[1];
+  assert.ok(multiEl.querySelector(".sr-prev") !== null);
+  assert.ok(multiEl.querySelector(".sr-next") !== null);
+  assert.strictEqual(multiEl.querySelector(".sr-count").textContent, "1 / 3");
+  assert.strictEqual(singleEl.querySelector(".sr-count"), null);
+
+  const initialSnippet = multiEl.querySelector(".sr-snippet").innerHTML;
+  assert.ok(initialSnippet.includes("<mark>exact phrase</mark>"));
+
+  // Clicking next button cycles preview without opening file
+  let stopped = false;
+  multiEl.querySelector(".sr-next").dispatch("click", {
+    stopPropagation: () => {
+      stopped = true;
+    },
+  });
+  assert.strictEqual(stopped, true);
+  assert.strictEqual(contentFrame.src, "");
+  assert.strictEqual(multiEl.querySelector(".sr-count").textContent, "2 / 3");
+  const secondSnippet = multiEl.querySelector(".sr-snippet").innerHTML;
+  assert.notStrictEqual(secondSnippet, initialSnippet);
+
+  // Keyboard ArrowRight advances to 3 / 3 and ArrowLeft wraps/steps back
+  let prevented = false;
+  multiEl.dispatch("keydown", {
+    key: "ArrowRight",
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.strictEqual(prevented, true);
+  assert.strictEqual(multiEl.querySelector(".sr-count").textContent, "3 / 3");
+  assert.strictEqual(contentFrame.src, "");
+
+  // ArrowRight from 3 / 3 wraps to 1 / 3
+  multiEl.dispatch("keydown", { key: "ArrowRight", preventDefault: () => {} });
+  assert.strictEqual(multiEl.querySelector(".sr-count").textContent, "1 / 3");
+
+  // ArrowLeft from 1 / 3 wraps to 3 / 3
+  multiEl.dispatch("keydown", { key: "ArrowLeft", preventDefault: () => {} });
+  assert.strictEqual(multiEl.querySelector(".sr-count").textContent, "3 / 3");
+
+  // Enter opens the document and copies the unquoted phrase
+  multiEl.dispatch("keydown", { key: "Enter", preventDefault: () => {} });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(contentFrame.src.includes("multi.html?hl=%22exact+phrase%22"));
+  assert.strictEqual(copiedText, "exact phrase");
 });
 

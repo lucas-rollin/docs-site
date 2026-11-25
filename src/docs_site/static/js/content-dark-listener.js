@@ -37,6 +37,26 @@
     return { norm, map };
   }
 
+  function findSingleTokenMatchesInNorm(norm, map, token, ranges) {
+    let pos = 0;
+    while (true) {
+      pos = norm.indexOf(token, pos);
+      if (pos === -1) break;
+      const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+      const atEnd =
+        pos + token.length >= norm.length ||
+        !isWordChar(norm[pos + token.length]);
+      if (atStart && atEnd) {
+        const normStart = pos;
+        const normEnd = pos + token.length;
+        ranges.push([map[normStart], map[normEnd - 1] + 1]);
+        pos += token.length;
+      } else {
+        pos += 1;
+      }
+    }
+  }
+
   function findMatchesInText(text, cleanTerms) {
     if (!text || !cleanTerms || cleanTerms.length === 0) return [];
     const { norm, map } = normalizeWithMap(text);
@@ -52,44 +72,29 @@
         .trim();
       if (!cleanTerm) continue;
 
-      if (/\s/.test(cleanTerm)) {
-        const tokens = cleanTerm.split(/\s+/).filter(Boolean);
-        const escaped = tokens.map((t) =>
-          t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        );
-        const re = new RegExp(
-          `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
-          "gu",
-        );
-        let m = re.exec(norm);
-        while (m !== null) {
-          const normStart = m.index;
-          const normEnd = m.index + m[0].length;
-          const origStart = map[normStart];
-          const origEnd = map[normEnd - 1] + 1;
-          ranges.push([origStart, origEnd]);
-          m = re.exec(norm);
+      if (/[\s\p{P}]/u.test(cleanTerm)) {
+        const tokens = cleanTerm.split(/[\s\p{P}]+/u).filter(Boolean);
+        if (tokens.length === 0) continue;
+        if (tokens.length > 1) {
+          const escaped = tokens.map((t) =>
+            t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          );
+          const re = new RegExp(
+            `(?<![\\p{L}\\p{N}])${escaped.join("[\\s\\p{P}]+")}(?![\\p{L}\\p{N}])`,
+            "gu",
+          );
+          let m = re.exec(norm);
+          while (m !== null) {
+            const normStart = m.index;
+            const normEnd = m.index + m[0].length;
+            ranges.push([map[normStart], map[normEnd - 1] + 1]);
+            m = re.exec(norm);
+          }
+        } else {
+          findSingleTokenMatchesInNorm(norm, map, tokens[0], ranges);
         }
       } else {
-        let pos = 0;
-        while (true) {
-          pos = norm.indexOf(cleanTerm, pos);
-          if (pos === -1) break;
-          const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
-          const atEnd =
-            pos + cleanTerm.length >= norm.length ||
-            !isWordChar(norm[pos + cleanTerm.length]);
-          if (atStart && atEnd) {
-            const normStart = pos;
-            const normEnd = pos + cleanTerm.length;
-            const origStart = map[normStart];
-            const origEnd = map[normEnd - 1] + 1;
-            ranges.push([origStart, origEnd]);
-            pos += cleanTerm.length;
-          } else {
-            pos += 1;
-          }
-        }
+        findSingleTokenMatchesInNorm(norm, map, cleanTerm, ranges);
       }
     }
 
@@ -162,18 +167,18 @@
       rawStr = String(input);
     }
 
-    const trimmed = rawStr.trim();
+    const trimmed = rawStr.replace(/[\u201c\u201d]/g, '"').trim();
     if (!trimmed) return { phrases: [], tokens: [], exactOnly: false };
 
     const exactPhrases = [];
-    const phraseRegex = /"([^"]+)"|'([^']+)'/g;
-    let remaining = trimmed.replace(phraseRegex, (_match, p1, p2) => {
-      const phrase = (p1 || p2).trim();
+    const phraseRegex = /"([^"]+)"/g;
+    let remaining = trimmed.replace(phraseRegex, (_match, p1) => {
+      const phrase = p1.trim();
       if (phrase) exactPhrases.push(phrase);
       return " ";
     });
 
-    const unclosedMatch = remaining.match(/["']([^"']+)$/);
+    const unclosedMatch = remaining.match(/"([^"]+)$/);
     if (unclosedMatch?.[1].trim()) {
       exactPhrases.push(unclosedMatch[1].trim());
       remaining = remaining.slice(0, unclosedMatch.index);

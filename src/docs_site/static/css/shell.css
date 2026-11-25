@@ -130,11 +130,60 @@ header .site-title {
 .search-result .sr-title {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
   font-weight: 600;
   font-size: 13.5px;
 }
+.search-result .sr-title-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+.search-result .sr-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .search-result .sr-title .type-icon {
   margin-right: 0.45em;
+}
+.search-result .sr-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.search-result .sr-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.search-result .sr-nav-btn:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+  color: var(--accent);
+}
+.search-result .sr-count {
+  min-width: 2.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .search-result .sr-snippet {
   display: block;
