@@ -60,6 +60,9 @@ docs-site ~/notes/linux-learning --no-open
 # Skip generating llms.txt and llms-full.txt
 docs-site ~/notes/linux-learning --no-llms-txt
 
+# Choose how document titles are resolved: auto (default), h1, or filename
+docs-site ~/notes/linux-learning --title-source filename
+
 # Display version
 docs-site --version
 

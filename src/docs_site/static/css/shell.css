@@ -69,6 +69,9 @@ header .site-title {
   width: 15px;
   height: 15px;
 }
+.file-item .type-icon {
+  margin-top: 0.12em;
+}
 
 .search-wrap {
   position: relative;
@@ -190,6 +193,15 @@ header .site-title {
   font-size: 12.5px;
   color: var(--muted);
   margin-top: 0.2em;
+}
+.search-result .sr-path {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 0.15em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .search-result mark {
   background: #fde68a;
@@ -346,6 +358,26 @@ html.reader-dark #copy-toast kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.file-item a {
+  align-items: flex-start;
+}
+.file-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.file-title,
+.file-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-filename {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.3;
+}
 .file-item a:hover,
 .toc-item a:hover {
   background: var(--hover);
@@ -353,6 +385,9 @@ html.reader-dark #copy-toast kbd {
 .file-item a.active {
   background: var(--accent);
   color: #fff;
+}
+.file-item a.active .file-filename {
+  color: rgba(255, 255, 255, 0.85);
 }
 .toc-item a {
   padding-left: calc(0.5em + var(--indent, 0px));

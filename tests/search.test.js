@@ -601,3 +601,79 @@ test("Search result arrows and keyboard navigation cycle previews without openin
   assert.strictEqual(copiedText, "exact phrase");
 });
 
+test("Search indexes filenames and relative paths", () => {
+  const files = [
+    {
+      id: "doc-france",
+      title: "Geography of Europe",
+      relpath: "europe/france.md",
+      headings: [],
+      text: "Cities, regions, and rivers.",
+    },
+    {
+      id: "doc-config",
+      title: "Settings Reference",
+      relpath: "deploy/config.yaml.md",
+      headings: [],
+      text: "Environment variables and port numbers.",
+    },
+  ];
+
+  shell.setManifest({ files });
+  shell.initMiniSearch(files);
+
+  const byFilename = shell.searchDocuments("france.md");
+  assert.strictEqual(byFilename.length, 1);
+  assert.strictEqual(byFilename[0].id, "doc-france");
+
+  const byStem = shell.searchDocuments("france");
+  assert.strictEqual(byStem.length, 1);
+  assert.strictEqual(byStem[0].id, "doc-france");
+
+  const byPath = shell.searchDocuments("europe/france");
+  assert.strictEqual(byPath.length, 1);
+  assert.strictEqual(byPath[0].id, "doc-france");
+
+  const quotedFilename = shell.searchDocuments('"france.md"');
+  assert.strictEqual(quotedFilename.length, 1);
+  assert.strictEqual(quotedFilename[0].id, "doc-france");
+
+  const byConfig = shell.searchDocuments("config.yaml");
+  assert.strictEqual(byConfig.length, 1);
+  assert.strictEqual(byConfig[0].id, "doc-config");
+});
+
+test("Sidebar file list shows muted filename when title differs from stem", () => {
+  const leftPanel = {
+    innerHTML: "",
+    querySelectorAll: () => [],
+  };
+  const mockDocument = {
+    getElementById: (id) => (id === "left-panel" ? leftPanel : null),
+  };
+
+  shell.setManifest({
+    files: [
+      {
+        id: "f1",
+        type: "markdown",
+        title: "Getting Started",
+        relpath: "guides/getting-started.md",
+      },
+      {
+        id: "f2",
+        type: "markdown",
+        title: "README",
+        relpath: "README.md",
+      },
+    ],
+  });
+  shell._setEnv(mockDocument, {});
+  shell.renderFileList();
+
+  assert.ok(leftPanel.innerHTML.includes('<span class="file-title">Getting Started</span>'));
+  assert.ok(leftPanel.innerHTML.includes('<span class="file-filename">getting-started.md</span>'));
+  assert.ok(leftPanel.innerHTML.includes('<span class="file-title">README</span>'));
+  assert.ok(!leftPanel.innerHTML.includes('<span class="file-filename">README.md</span>'));
+});
+

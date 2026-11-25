@@ -4,6 +4,7 @@ from pathlib import Path
 
 import markdown
 
+from ..types import TitleSource
 from .base import DocumentProcessor, ProcessorOutput
 from .html_processor import normalize_html_content
 
@@ -36,6 +37,7 @@ class MarkdownProcessor(DocumentProcessor):
         pages_dir: Path,
         fid: str,
         doc_map: dict[str, str],
+        title_source: TitleSource = "auto",
     ) -> ProcessorOutput:
         raw_text = path.read_text(encoding="utf-8", errors="replace")
         relpath = path.relative_to(root).as_posix()
@@ -56,6 +58,7 @@ class MarkdownProcessor(DocumentProcessor):
             fallback_title=path.stem,
             source_relpath=relpath,
             doc_map=doc_map,
+            title_source=title_source,
         )
 
         out_path = pages_dir / f"{fid}.html"

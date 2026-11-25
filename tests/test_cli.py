@@ -112,6 +112,46 @@ def test_cli_version() -> None:
     assert "docs-site 0.2.1" in stdout_buf.getvalue()
 
 
+def test_cli_help_documents_title_source() -> None:
+    stdout_buf = io.StringIO()
+    with patch("sys.stdout", stdout_buf):
+        try:
+            main(["--help"])
+        except SystemExit as exc:
+            assert exc.code == 0
+    help_text = stdout_buf.getvalue()
+    assert "--title-source" in help_text
+    assert "auto" in help_text
+    assert "h1" in help_text
+    assert "filename" in help_text
+
+
+def test_cli_title_source_filename(tmp_path: Path) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "getting-started.md").write_text(
+        "# Welcome Heading\n\nBody text.", encoding="utf-8"
+    )
+    out_dir = tmp_path / "_site"
+
+    stdout_buf = io.StringIO()
+    with patch("sys.stdout", stdout_buf):
+        exit_code = main(
+            [
+                str(docs_dir),
+                "-o",
+                str(out_dir),
+                "--no-open",
+                "--title-source",
+                "filename",
+            ]
+        )
+
+    assert exit_code == 0
+    index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+    assert '"title": "getting-started"' in index_html
+
+
 def test_cli_dump_clean_stdout_when_file_fails(tmp_path: Path) -> None:
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()

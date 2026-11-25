@@ -1,12 +1,13 @@
 """Scan a folder for supported files and build the JSON manifest the frontend reads."""
 
+import inspect
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict
 
 from .processors import ProcessorRegistry, get_default_registry
-from .types import Heading
+from .types import VALID_TITLE_SOURCES, Heading, TitleSource
 from .utils import safe_id
 
 DEFAULT_REGISTRY = get_default_registry()
@@ -88,8 +89,13 @@ def build_manifest(
     files: list[Path],
     pages_dir: Path,
     registry: ProcessorRegistry | None = None,
+    title_source: TitleSource = "auto",
 ) -> Manifest:
     """Process every file, write out HTML content pages, and return the site manifest."""
+    if title_source not in VALID_TITLE_SOURCES:
+        raise ValueError(
+            f"invalid title_source {title_source!r}; expected one of {VALID_TITLE_SOURCES}"
+        )
     active_registry = registry or DEFAULT_REGISTRY
     manifest_entries: list[ManifestEntry] = []
     used_ids: set[str] = set()
@@ -110,17 +116,35 @@ def build_manifest(
         if not processor:
             continue
 
+        proc_params = inspect.signature(processor.process).parameters
+        supports_title_source = "title_source" in proc_params
         try:
-            output = processor.process(
-                path=path,
-                root=root,
-                pages_dir=pages_dir,
-                fid=fid,
-                doc_map=doc_map,
-            )
+            if supports_title_source:
+                output = processor.process(
+                    path=path,
+                    root=root,
+                    pages_dir=pages_dir,
+                    fid=fid,
+                    doc_map=doc_map,
+                    title_source=title_source,  # type: ignore[call-arg]
+                )
+            else:
+                output = processor.process(
+                    path=path,
+                    root=root,
+                    pages_dir=pages_dir,
+                    fid=fid,
+                    doc_map=doc_map,
+                )
         except Exception as exc:  # noqa: BLE001 - keep building the rest of the site
             print(f"warning: skipping {relpath} ({exc})", file=sys.stderr)
             continue
+
+        title = (
+            path.stem
+            if not supports_title_source and title_source == "filename"
+            else output.title
+        )
 
         text = output.text
         if len(text) > MAX_INDEXED_CHARS:
@@ -133,7 +157,7 @@ def build_manifest(
         entry = ManifestEntry(
             id=fid,
             type=processor.file_type,
-            title=output.title,
+            title=title,
             relpath=relpath,
             src=output.src,
             headings=output.headings,

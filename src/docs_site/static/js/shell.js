@@ -33,6 +33,17 @@
     return MANIFEST.files.find((f) => f.id === id);
   }
 
+  function filenameOf(file) {
+    const rel = file?.relpath || "";
+    const idx = rel.lastIndexOf("/");
+    return idx === -1 ? rel : rel.slice(idx + 1);
+  }
+
+  function stemOf(filename) {
+    const dot = filename.lastIndexOf(".");
+    return dot > 0 ? filename.slice(0, dot) : filename;
+  }
+
   const ICONS = {
     html: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
     pdf: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M10 12h4"/><path d="M10 16h4"/></svg>',
@@ -77,9 +88,19 @@
     for (const dir of dirs) {
       html += `<div class="panel-heading">${dir ? escapeHtml(dir) : "Root"}</div><ul class="file-list">`;
       for (const f of groups[dir]) {
+        const filename = filenameOf(f);
+        const stem = stemOf(filename);
+        const showFilename =
+          Boolean(filename) &&
+          (f.title || "").trim().toLowerCase() !== stem.toLowerCase();
+        const subHtml = showFilename
+          ? `<span class="file-filename">${escapeHtml(filename)}</span>`
+          : "";
         html +=
-          `<li class="file-item"><a href="#" data-id="${f.id}" class="${f.id === currentFileId ? "active" : ""}">` +
-          `<span class="type-icon">${iconFor(f.type)}</span>${escapeHtml(f.title)}</a></li>`;
+          `<li class="file-item"><a href="#" data-id="${f.id}" title="${escapeHtml(filename || f.title)}" class="${f.id === currentFileId ? "active" : ""}">` +
+          `<span class="type-icon">${iconFor(f.type)}</span>` +
+          `<span class="file-label"><span class="file-title">${escapeHtml(f.title)}</span>${subHtml}</span>` +
+          `</a></li>`;
       }
       html += "</ul>";
     }
@@ -276,15 +297,23 @@
 
   // --- Search indexing (MiniSearch) ----------------------------------------
 
+  const SEARCH_BOOST = {
+    title: 5,
+    filename: 3,
+    relpath: 3,
+    headings: 2,
+    text: 1,
+  };
+
   let miniSearch = null;
 
   function initMiniSearch(files) {
     if (typeof MiniSearch !== "undefined") {
       miniSearch = new MiniSearch({
-        fields: ["title", "headings", "text"],
+        fields: ["title", "filename", "relpath", "headings", "text"],
         storeFields: ["id"],
         searchOptions: {
-          boost: { title: 5, headings: 2, text: 1 },
+          boost: SEARCH_BOOST,
         },
         processTerm: (term) =>
           term
@@ -296,6 +325,8 @@
         (files || MANIFEST.files).map((f) => ({
           id: f.id,
           title: f.title || "",
+          filename: filenameOf(f),
+          relpath: f.relpath || "",
           headings: (f.headings || []).map((h) => h.text).join(" "),
           text: f.text || "",
         })),
@@ -335,6 +366,7 @@
     const re = makePhraseRegex(phrase);
     if (!re) return false;
     if (file.title && re.test(normalizeText(file.title))) return true;
+    if (file.relpath && re.test(normalizeText(file.relpath))) return true;
     if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
       return true;
     }
@@ -349,6 +381,9 @@
     let boost = 0;
     if (file.title && re.test(normalizeText(file.title))) {
       boost += 100;
+    }
+    if (file.relpath && re.test(normalizeText(file.relpath))) {
+      boost += 60;
     }
     if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
       boost += 50;
@@ -677,7 +712,7 @@
     let hits = [];
     if (miniSearch) {
       const searchOptions = {
-        boost: { title: 5, headings: 2, text: 1 },
+        boost: SEARCH_BOOST,
         prefix: (_term, index, terms) => index === terms.length - 1,
         combineWith: "AND",
       };
@@ -694,11 +729,12 @@
     } else {
       for (const f of MANIFEST.files) {
         const titleNorm = normalizeText(f.title);
+        const relpathNorm = normalizeText(f.relpath);
         const textNorm = normalizeText(f.text);
         const headingsNorm = (f.headings || [])
           .map((h) => normalizeText(h.text))
           .join(" ");
-        const allDocNorm = `${titleNorm} ${headingsNorm} ${textNorm}`;
+        const allDocNorm = `${titleNorm} ${relpathNorm} ${headingsNorm} ${textNorm}`;
 
         const allMatched = parsed.allTerms.every((term) => {
           const re = makePhraseRegex(term);
@@ -718,6 +754,7 @@
         for (const term of parsed.allTerms) {
           const re = makePhraseRegex(term);
           if (re?.test(titleNorm)) score += 5;
+          else if (re?.test(relpathNorm)) score += 3;
           else if (re?.test(headingsNorm)) score += 2;
         }
 
@@ -786,9 +823,13 @@
                 `<button type="button" class="sr-nav-btn sr-next" tabindex="-1" aria-label="Next match preview" title="Next match (→)">&#8250;</button>` +
                 `</span>`
               : "";
+          const pathHtml = file.relpath
+            ? `<span class="sr-path">${highlightTerms(file.relpath, matchTerms)}</span>`
+            : "";
           return `
         <div class="search-result" role="option" tabindex="0" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}" data-hl="${escapeHtml(query)}">
           <span class="sr-title"><span class="sr-title-main"><span class="type-icon">${iconFor(file.type)}</span><span class="sr-title-text">${highlightTerms(file.title, matchTerms)}</span></span>${pagerHtml}</span>
+          ${pathHtml}
           <span class="sr-snippet">${highlightTerms(windows[0], matchTerms)}</span>
         </div>
       `;
@@ -1014,6 +1055,7 @@
       hasExactPhrase,
       scorePhraseMatch,
       initMiniSearch,
+      renderFileList,
       setManifest: (m) => {
         MANIFEST.files = m.files || [];
       },
