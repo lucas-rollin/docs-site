@@ -152,6 +152,69 @@ def test_cli_title_source_filename(tmp_path: Path) -> None:
     assert '"title": "getting-started"' in index_html
 
 
+def test_cli_smoke_sample_docs(tmp_path: Path) -> None:
+    fixtures_dir = Path(__file__).parent / "fixtures" / "sample_docs"
+    assert fixtures_dir.is_dir()
+
+    # Smoke test each --title-source mode against real sample_docs fixtures
+    expected_titles = {
+        "auto": {
+            "sample.html": "HTML Fixture",
+            "sample.md": "Markdown Fixture",
+            "sample.pdf": "PDF Fixture",
+        },
+        "h1": {
+            "sample.html": "HTML Fixture",
+            "sample.md": "Markdown Fixture",
+            "sample.pdf": "Text Formatting & Inline Elements",
+        },
+        "filename": {
+            "sample.html": "sample",
+            "sample.md": "sample",
+            "sample.pdf": "sample",
+        },
+    }
+
+    for mode, expected in expected_titles.items():
+        out_dir = tmp_path / f"site_{mode}"
+        stdout_buf = io.StringIO()
+        with patch("sys.stdout", stdout_buf):
+            exit_code = main(
+                [
+                    str(fixtures_dir),
+                    "-o",
+                    str(out_dir),
+                    "--no-open",
+                    "--title-source",
+                    mode,
+                ]
+            )
+
+        assert exit_code == 0
+        assert "Indexed 3 file(s)" in stdout_buf.getvalue()
+        assert (out_dir / "index.html").is_file()
+        assert (out_dir / "llms.txt").is_file()
+        assert (out_dir / "llms-full.txt").is_file()
+
+        index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+        for title in expected.values():
+            assert f'"title": "{title}"' in index_html
+
+    # Smoke test --dump and --dump --file against sample_docs
+    dump_buf = io.StringIO()
+    with patch("sys.stdout", dump_buf):
+        assert main([str(fixtures_dir), "--dump"]) == 0
+    dump_out = dump_buf.getvalue()
+    assert "## File: sample.html" in dump_out
+    assert "## File: sample.md" in dump_out
+    assert "## File: sample.pdf" in dump_out
+
+    single_buf = io.StringIO()
+    with patch("sys.stdout", single_buf):
+        assert main([str(fixtures_dir), "--dump", "--file", "sample.md"]) == 0
+    assert "# Markdown Fixture" in single_buf.getvalue()
+
+
 def test_cli_dump_clean_stdout_when_file_fails(tmp_path: Path) -> None:
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
