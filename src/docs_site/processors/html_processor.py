@@ -9,7 +9,7 @@ from urllib.parse import urldefrag, urlparse
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 
-from ..types import Heading
+from ..types import Heading, TitleSource
 from ..utils import slugify
 from .base import DocumentProcessor, ProcessorOutput
 
@@ -114,6 +114,7 @@ def normalize_html_content(
     fallback_title: str,
     source_relpath: str = "",
     doc_map: dict[str, str] | None = None,
+    title_source: TitleSource = "auto",
 ) -> dict[str, Any]:
     """Parse HTML, slugify headings, link stylesheets/scripts, and rewrite links."""
     full_html = ensure_full_document(raw_html, title=fallback_title)
@@ -141,19 +142,29 @@ def normalize_html_content(
         html_tag.append(body_tag)
 
     title = fallback_title
-    if (
-        soup.title
-        and soup.title.string
-        and soup.title.string.strip()
-        and soup.title.string.strip() != fallback_title
-    ):
-        title = soup.title.string.strip()
-    else:
+    if title_source == "filename":
+        if soup.title:
+            soup.title.string = title
+    elif title_source == "h1":
         h1 = soup.find("h1")
         if h1 and h1.get_text(strip=True):
             title = h1.get_text(strip=True)
-            if soup.title:
-                soup.title.string = title
+        if soup.title:
+            soup.title.string = title
+    else:
+        if (
+            soup.title
+            and soup.title.string
+            and soup.title.string.strip()
+            and soup.title.string.strip() != fallback_title
+        ):
+            title = soup.title.string.strip()
+        else:
+            h1 = soup.find("h1")
+            if h1 and h1.get_text(strip=True):
+                title = h1.get_text(strip=True)
+                if soup.title:
+                    soup.title.string = title
 
     # Rewrite links if doc_map provided
     if doc_map and source_relpath:
@@ -233,6 +244,7 @@ class HtmlProcessor(DocumentProcessor):
         pages_dir: Path,
         fid: str,
         doc_map: dict[str, str],
+        title_source: TitleSource = "auto",
     ) -> ProcessorOutput:
         raw = path.read_text(encoding="utf-8", errors="replace")
         relpath = path.relative_to(root).as_posix()
@@ -241,6 +253,7 @@ class HtmlProcessor(DocumentProcessor):
             fallback_title=path.stem,
             source_relpath=relpath,
             doc_map=doc_map,
+            title_source=title_source,
         )
 
         out_path = pages_dir / f"{fid}.html"

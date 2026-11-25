@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from .llms_generator import generate_llms_files
 from .manifest import Manifest, build_manifest, scan_folder
+from .types import TitleSource
 
 
 def _package_path(*parts: str) -> Traversable:
@@ -44,6 +45,7 @@ def build_site(
     output_dir: Path,
     site_title: str,
     generate_llms: bool = True,
+    title_source: TitleSource = "auto",
 ) -> Manifest:
     """Scan `root`, build the manifest, render the site into `output_dir`.
 
@@ -55,7 +57,7 @@ def build_site(
     pages_dir.mkdir(parents=True, exist_ok=True)
 
     files = scan_folder(root, output_dir)
-    manifest = build_manifest(root, files, pages_dir)
+    manifest = build_manifest(root, files, pages_dir, title_source=title_source)
 
     _copy_static_assets(output_dir)
 

@@ -7,7 +7,7 @@ from typing import Any
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
-from ..types import Heading
+from ..types import Heading, TitleSource
 from .base import DocumentProcessor, ProcessorOutput
 
 
@@ -63,17 +63,24 @@ class PdfProcessor(DocumentProcessor):
         pages_dir: Path,
         fid: str,
         doc_map: dict[str, str],
+        title_source: TitleSource = "auto",
     ) -> ProcessorOutput:
         reader = PdfReader(str(path))
         metadata = reader.metadata
         raw_title = metadata.title if metadata else ""
-        title = raw_title.strip() if raw_title else path.stem
 
         try:
             outline = reader.outline or []
             headings = _extract_headings(reader, outline)
         except (PyPdfError, AttributeError, TypeError, ValueError):
             headings = []
+
+        if title_source == "filename":
+            title = path.stem
+        elif title_source == "h1":
+            title = headings[0]["text"] if headings else path.stem
+        else:
+            title = raw_title.strip() if raw_title else path.stem
 
         # Omit top-level heading from TOC if it represents the document title
         if headings and headings[0]["level"] == 1:

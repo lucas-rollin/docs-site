@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from docs_site.manifest import scan_folder
+import pytest
+from pypdf import PdfWriter
+
+from docs_site.manifest import build_manifest, scan_folder
 from docs_site.site_builder import build_site
 
 
@@ -113,3 +116,101 @@ def test_site_title_html_escaping(tmp_path: Path) -> None:
     index_html = (out_dir / "index.html").read_text(encoding="utf-8")
     assert "&lt;Test &amp; Special&gt;" in index_html
     assert "<Test & Special>" not in index_html
+
+
+def test_manifest_title_source_modes(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+
+    (src_dir / "guide.md").write_text("# Markdown H1\n\nBody.", encoding="utf-8")
+    (src_dir / "page.html").write_text(
+        "<!DOCTYPE html><html><head><title>HTML Meta Title</title></head>"
+        "<body><h1>HTML H1</h1><p>Text.</p></body></html>",
+        encoding="utf-8",
+    )
+
+    pdf_path = src_dir / "manual.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    writer.add_outline_item("PDF Outline Title", 0)
+    writer.add_metadata({"/Title": "PDF Metadata Title"})
+    with pdf_path.open("wb") as f:
+        writer.write(f)
+
+    files = scan_folder(src_dir, tmp_path / "_unused")
+
+    # 1. auto (default): <title> for HTML, H1 for Markdown, metadata for PDF
+    auto_pages = tmp_path / "auto_pages"
+    auto_pages.mkdir()
+    auto_manifest = build_manifest(src_dir, files, auto_pages, title_source="auto")
+    auto_titles = {e["relpath"]: e["title"] for e in auto_manifest["files"]}
+    assert auto_titles == {
+        "guide.md": "Markdown H1",
+        "manual.pdf": "PDF Metadata Title",
+        "page.html": "HTML Meta Title",
+    }
+
+    # 2. h1: first heading (or PDF outline root) with fallback to stem
+    (src_dir / "no-heading.html").write_text(
+        "<html><head><title>Ignored Title</title></head><body><p>No h1.</p></body></html>",
+        encoding="utf-8",
+    )
+    files_with_no_h1 = scan_folder(src_dir, tmp_path / "_unused")
+    h1_pages = tmp_path / "h1_pages"
+    h1_pages.mkdir()
+    h1_manifest = build_manifest(src_dir, files_with_no_h1, h1_pages, title_source="h1")
+    h1_titles = {e["relpath"]: e["title"] for e in h1_manifest["files"]}
+    assert h1_titles == {
+        "guide.md": "Markdown H1",
+        "manual.pdf": "PDF Outline Title",
+        "no-heading.html": "no-heading",
+        "page.html": "HTML H1",
+    }
+
+    # 3. filename: file stem for all documents
+    fn_pages = tmp_path / "fn_pages"
+    fn_pages.mkdir()
+    fn_manifest = build_manifest(
+        src_dir, files_with_no_h1, fn_pages, title_source="filename"
+    )
+    fn_titles = {e["relpath"]: e["title"] for e in fn_manifest["files"]}
+    assert fn_titles == {
+        "guide.md": "guide",
+        "manual.pdf": "manual",
+        "no-heading.html": "no-heading",
+        "page.html": "page",
+    }
+
+    with pytest.raises(ValueError, match="invalid title_source"):
+        build_manifest(
+            src_dir,
+            files,
+            fn_pages,
+            title_source="invalid",  # type: ignore[arg-type]
+        )
+
+
+def test_responsive_layout_assets(tmp_path: Path) -> None:
+    src_dir = tmp_path / "docs"
+    src_dir.mkdir()
+    (src_dir / "doc.md").write_text("# Doc\n\n## Section", encoding="utf-8")
+    out_dir = tmp_path / "_site"
+
+    build_site(src_dir, out_dir, site_title="Responsive")
+
+    index_html = (out_dir / "index.html").read_text(encoding="utf-8")
+    assert 'name="viewport"' in index_html
+    assert 'id="nav-toggle-btn"' in index_html
+    assert 'id="toc-toggle-btn"' in index_html
+    assert 'id="toc-popover"' in index_html
+    assert 'id="drawer-backdrop"' in index_html
+
+    shell_css = (out_dir / "static" / "css" / "shell.css").read_text(encoding="utf-8")
+    assert "100dvh" in shell_css
+    assert "260px minmax(500px, 1fr) 280px" in shell_css
+    assert "@media (max-width: 1149px)" in shell_css
+    assert "@media (max-width: 849px)" in shell_css
+    assert "@media (max-width: 767px)" in shell_css
+    assert "@media (max-width: 639px)" in shell_css
+    assert ".toc-dropdown-wrap" in shell_css
+    assert "width: auto;" in shell_css

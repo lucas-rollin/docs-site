@@ -1,7 +1,10 @@
 """Shared typed structures passed between processors, manifest building, and
 the frontend (as JSON)."""
 
-from typing import TypedDict
+from typing import Literal, TypedDict
+
+TitleSource = Literal["auto", "h1", "filename"]
+VALID_TITLE_SOURCES: tuple[TitleSource, ...] = ("auto", "h1", "filename")
 
 
 class Heading(TypedDict, total=False):

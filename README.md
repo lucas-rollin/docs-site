@@ -14,12 +14,12 @@ Turn a folder of Markdown, HTML, and PDF files into a clean, searchable, dark-mo
   - **Markdown** (`.md`, `.markdown`): Rendered with syntax highlighting, tables, and admonitions.
   - **HTML** (`.html`, `.htm`): Formatted with isolated reader styling and link rewriting.
   - **PDF** (`.pdf`): Integrated directly with bookmark outlines and portable file bundling.
-- **Fast Client-Side Search**: Full-text MiniSearch indexing across all documents with instant in-page term highlighting, auto-scroll to matches, and keyboard navigation (`↑`/`↓`/`Enter`/`Esc`).
+- **Fast Client-Side Search**: Full-text MiniSearch indexing across titles, filenames, relative paths, headings, and body text, with Google-style `"quoted phrase"` matching, clipboard phrase handoff (`Ctrl+F` / `⌘F`), in-dropdown match preview cycling (`‹ 1 / N ›` via `←`/`→`), and keyboard navigation (`↑`/`↓`/`←`/`→`/`Enter`/`Esc`).
 - **LLM-Ready Workflows**:
   - **Copy Page**: One-click button in the header toolbar copies the active page's clean, structured Markdown to your clipboard.
   - **Standardized `llms.txt`**: Automatically creates `llms.txt` index and `llms-full.txt` corpus following the [llmstxt.org](https://llmstxt.org) standard.
   - **CLI Pipe**: Dump clean Markdown directly to `stdout` for CLI piping (e.g. `docs-site docs/ --dump | llm`).
-- **Automatic Table of Contents**: Extracts headings (`<h1>`–`<h6>`) and PDF outline bookmarks into a sidebar.
+- **Responsive Navigation & TOC**: Sidebar shows document titles with base filenames, collapses into an off-canvas drawer on narrow screens (`< 850px`), and keeps the *"On this page"* Table of Contents accessible in a header popover between `850px` and `1149px`.
 - **Dark Mode**: Built-in dark/light theme toggle, synchronized across framed documents and welcome screen.
 - **Zero Configuration**: Recursively scans folders while automatically ignoring `.git`, `.venv`, `node_modules`, and hidden directories.
 
@@ -60,12 +60,31 @@ docs-site ~/notes/linux-learning --no-open
 # Skip generating llms.txt and llms-full.txt
 docs-site ~/notes/linux-learning --no-llms-txt
 
+# Choose how document titles are resolved:
+#   auto     (default) HTML <title>/<h1>, Markdown <h1>, PDF metadata, then file stem
+#   h1       First <h1> / PDF outline heading, falling back to file stem
+#   filename Always use the file stem
+docs-site ~/notes/linux-learning --title-source filename
+
 # Display version
 docs-site --version
 
 # View all options
 docs-site --help
 ```
+
+### CLI Reference
+
+| Option | Description |
+| --- | --- |
+| `folder` | Folder or single file to scan (`.md`, `.markdown`, `.html`, `.htm`, `.pdf`) |
+| `-o`, `--output DIR` | Custom output directory (default: `<folder>/_site`) |
+| `--no-open` | Build the static site without launching the browser |
+| `--no-llms-txt` | Skip generating `llms.txt` and `llms-full.txt` |
+| `--title-source {auto,h1,filename}` | Control how primary document titles are resolved (default: `auto`) |
+| `--dump` | Print clean Markdown to `stdout` instead of building a site |
+| `--file TARGET` | Relative path or filename to print when using `--dump` |
+| `--version` | Show installed `docs-site` version and exit |
 
 ### CLI Pipe Workflow (LLMs & Tooling)
 

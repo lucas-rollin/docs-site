@@ -14,7 +14,7 @@ from .site_builder import build_site
 try:
     __version__ = importlib.metadata.version("docs-site")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "0.2.1"
+    __version__ = "0.3.0"
 
 
 def _find_matching_entry(
@@ -82,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Specific relative file path or name to dump when using --dump (default: entire corpus)",
     )
+    parser.add_argument(
+        "--title-source",
+        choices=("auto", "h1", "filename"),
+        default="auto",
+        help="How to determine document titles: auto (default), h1 (first heading), or filename (file stem)",
+    )
     args = parser.parse_args(argv)
 
     target_path = args.folder.resolve()
@@ -105,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir=tmp_output,
                 site_title=root.name,
                 generate_llms=True,
+                title_source=args.title_source,
             )
 
             if target_file:
@@ -142,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=output_dir,
         site_title=root.name,
         generate_llms=not args.no_llms_txt,
+        title_source=args.title_source,
     )
 
     type_counts = Counter(f.get("type", "unknown") for f in manifest["files"])

@@ -7,7 +7,12 @@
   let win = typeof window !== "undefined" ? window : null;
   let contentFrame = doc?.getElementById("content-frame");
   let leftPanel = doc?.getElementById("left-panel");
+  let drawerBackdrop = doc?.getElementById("drawer-backdrop");
+  let navToggleBtn = doc?.getElementById("nav-toggle-btn");
   let tocBody = doc?.getElementById("toc-body");
+  let tocToggleBtn = doc?.getElementById("toc-toggle-btn");
+  let tocPopover = doc?.getElementById("toc-popover");
+  let tocPopoverBody = doc?.getElementById("toc-popover-body");
   let searchInput = doc?.getElementById("search-input");
   let searchResults = doc?.getElementById("search-results");
   let darkToggle = doc?.getElementById("dark-toggle");
@@ -25,12 +30,23 @@
     copyToast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
-      copyToast.classList.remove("show");
+      copyToast?.classList.remove("show");
     }, 2200);
   }
 
   function fileById(id) {
     return MANIFEST.files.find((f) => f.id === id);
+  }
+
+  function filenameOf(file) {
+    const rel = file?.relpath || "";
+    const idx = rel.lastIndexOf("/");
+    return idx === -1 ? rel : rel.slice(idx + 1);
+  }
+
+  function stemOf(filename) {
+    const dot = filename.lastIndexOf(".");
+    return dot > 0 ? filename.slice(0, dot) : filename;
   }
 
   const ICONS = {
@@ -77,9 +93,19 @@
     for (const dir of dirs) {
       html += `<div class="panel-heading">${dir ? escapeHtml(dir) : "Root"}</div><ul class="file-list">`;
       for (const f of groups[dir]) {
+        const filename = filenameOf(f);
+        const stem = stemOf(filename);
+        const showFilename =
+          Boolean(filename) &&
+          (f.title || "").trim().toLowerCase() !== stem.toLowerCase();
+        const subHtml = showFilename
+          ? `<span class="file-filename">${escapeHtml(filename)}</span>`
+          : "";
         html +=
-          `<li class="file-item"><a href="#" data-id="${f.id}" class="${f.id === currentFileId ? "active" : ""}">` +
-          `<span class="type-icon">${iconFor(f.type)}</span>${escapeHtml(f.title)}</a></li>`;
+          `<li class="file-item"><a href="#" data-id="${f.id}" title="${escapeHtml(filename || f.title)}" class="${f.id === currentFileId ? "active" : ""}">` +
+          `<span class="type-icon">${iconFor(f.type)}</span>` +
+          `<span class="file-label"><span class="file-title">${escapeHtml(f.title)}</span>${subHtml}</span>` +
+          `</a></li>`;
       }
       html += "</ul>";
     }
@@ -93,13 +119,48 @@
     });
   }
 
-  // --- Table of contents (right sidebar) ----------------------------------
+  // --- Responsive drawer & TOC popover ------------------------------------
 
-  function renderToc(file) {
-    if (!tocBody) return;
+  function setNavDrawerOpen(open) {
+    const isOpen = Boolean(open);
+    leftPanel?.classList.toggle("open", isOpen);
+    drawerBackdrop?.classList.toggle("open", isOpen);
+    navToggleBtn?.setAttribute("aria-expanded", String(isOpen));
+  }
+
+  function closeNavDrawer() {
+    setNavDrawerOpen(false);
+  }
+
+  function toggleNavDrawer() {
+    const isOpen = Boolean(leftPanel?.classList.contains("open"));
+    if (!isOpen) closeTocPopover();
+    setNavDrawerOpen(!isOpen);
+  }
+
+  function setTocPopoverOpen(open) {
+    const isOpen = Boolean(open);
+    tocPopover?.classList.toggle("open", isOpen);
+    tocToggleBtn?.setAttribute("aria-expanded", String(isOpen));
+  }
+
+  function closeTocPopover() {
+    setTocPopoverOpen(false);
+  }
+
+  function toggleTocPopover() {
+    const isOpen = Boolean(tocPopover?.classList.contains("open"));
+    if (!isOpen) closeNavDrawer();
+    setTocPopoverOpen(!isOpen);
+  }
+
+  // --- Table of contents (right sidebar & responsive popover) -------------
+
+  function renderTocInto(container, file, onSelect) {
+    if (!container) return;
     if (!file?.headings || file.headings.length === 0) {
-      tocBody.className = "toc-empty";
-      tocBody.textContent =
+      container.className = "toc-empty";
+      container.textContent =
         file && file.type === "pdf"
           ? "No bookmarks in this PDF."
           : "No headings found.";
@@ -113,14 +174,20 @@
       html += `<li class="toc-item" style="--indent:${indent}px"><a href="#" data-target="${escapeHtml(target)}">${escapeHtml(h.text)}</a></li>`;
     }
     html += "</ul>";
-    tocBody.className = "";
-    tocBody.innerHTML = html;
-    tocBody.querySelectorAll(".toc-item a").forEach((a) => {
+    container.className = "";
+    container.innerHTML = html;
+    container.querySelectorAll(".toc-item a").forEach((a) => {
       a.addEventListener("click", (e) => {
         e.preventDefault();
         jumpTo(a.dataset.target);
+        onSelect?.();
       });
     });
+  }
+
+  function renderToc(file) {
+    renderTocInto(tocBody, file);
+    renderTocInto(tocPopoverBody, file, closeTocPopover);
   }
 
   // --- Content frame navigation --------------------------------------------
@@ -151,7 +218,9 @@
     } else if (file.type === "pdf") {
       let combinedHash = hash || "";
       if (highlightParam) {
-        const searchParam = `search=${encodeURIComponent(highlightParam)}`;
+        const pdfQuery =
+          parseSearchQuery(highlightParam).copyText || highlightParam;
+        const searchParam = `search=${encodeURIComponent(pdfQuery)}`;
         if (combinedHash) {
           const stripped = combinedHash.startsWith("#")
             ? combinedHash.slice(1)
@@ -189,6 +258,8 @@
     }
     renderFileList();
     renderToc(file);
+    closeNavDrawer();
+    closeTocPopover();
   }
 
   function jumpTo(hash) {
@@ -257,8 +328,9 @@
     selectFile(id, null, terms, hlQuery);
     searchResults?.classList.remove("open");
     if (searchInput) searchInput.value = "";
+    const parsedCopy = hlQuery ? parseSearchQuery(hlQuery).copyText : "";
     const queryToCopy =
-      hlQuery || (terms && terms.length > 0 ? terms.join(" ") : "");
+      parsedCopy || (terms && terms.length > 0 ? terms.join(" ") : "");
     if (queryToCopy) {
       copyToClipboard(queryToCopy).then(() => {
         const nav = getNavigator();
@@ -273,15 +345,23 @@
 
   // --- Search indexing (MiniSearch) ----------------------------------------
 
+  const SEARCH_BOOST = {
+    title: 5,
+    filename: 3,
+    relpath: 3,
+    headings: 2,
+    text: 1,
+  };
+
   let miniSearch = null;
 
   function initMiniSearch(files) {
     if (typeof MiniSearch !== "undefined") {
       miniSearch = new MiniSearch({
-        fields: ["title", "headings", "text"],
+        fields: ["title", "filename", "relpath", "headings", "text"],
         storeFields: ["id"],
         searchOptions: {
-          boost: { title: 5, headings: 2, text: 1 },
+          boost: SEARCH_BOOST,
         },
         processTerm: (term) =>
           term
@@ -293,6 +373,8 @@
         (files || MANIFEST.files).map((f) => ({
           id: f.id,
           title: f.title || "",
+          filename: filenameOf(f),
+          relpath: f.relpath || "",
           headings: (f.headings || []).map((h) => h.text).join(" "),
           text: f.text || "",
         })),
@@ -322,7 +404,7 @@
     if (tokens.length === 0) return null;
     const escaped = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     return new RegExp(
-      `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
+      `(?<![\\p{L}\\p{N}])${escaped.join("[\\s\\p{P}]+")}(?![\\p{L}\\p{N}])`,
       "u",
     );
   }
@@ -332,6 +414,7 @@
     const re = makePhraseRegex(phrase);
     if (!re) return false;
     if (file.title && re.test(normalizeText(file.title))) return true;
+    if (file.relpath && re.test(normalizeText(file.relpath))) return true;
     if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
       return true;
     }
@@ -347,6 +430,9 @@
     if (file.title && re.test(normalizeText(file.title))) {
       boost += 100;
     }
+    if (file.relpath && re.test(normalizeText(file.relpath))) {
+      boost += 60;
+    }
     if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
       boost += 50;
     }
@@ -356,49 +442,72 @@
     return boost;
   }
 
-  function findWordRanges(text, terms) {
+  function findSingleTokenMatches(norm, token, termLabel, matches) {
+    let pos = 0;
+    while (true) {
+      pos = norm.indexOf(token, pos);
+      if (pos === -1) break;
+      const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+      const atEnd =
+        pos + token.length >= norm.length ||
+        !isWordChar(norm[pos + token.length]);
+      if (atStart && atEnd) {
+        matches.push({
+          start: pos,
+          end: pos + token.length,
+          term: termLabel,
+          isPhrase: false,
+        });
+        pos += token.length;
+      } else {
+        pos += 1;
+      }
+    }
+  }
+
+  function collectTermMatches(text, terms) {
     if (!text || !terms || terms.length === 0) return [];
     const norm = normalizeText(text);
-    const ranges = [];
+    const matches = [];
 
     for (const term of terms) {
       if (!term) continue;
       const cleanTerm = normalizeText(term).trim();
       if (!cleanTerm) continue;
 
-      if (/\s/.test(cleanTerm)) {
-        const tokens = cleanTerm.split(/\s+/).filter(Boolean);
-        const escaped = tokens.map((t) =>
-          t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        );
-        const re = new RegExp(
-          `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
-          "gu",
-        );
-        let m = re.exec(norm);
-        while (m !== null) {
-          ranges.push([m.index, m.index + m[0].length]);
-          m = re.exec(norm);
+      if (/[\s\p{P}]/u.test(cleanTerm)) {
+        const tokens = cleanTerm.split(/[\s\p{P}]+/u).filter(Boolean);
+        if (tokens.length === 0) continue;
+        if (tokens.length > 1) {
+          const escaped = tokens.map((t) =>
+            t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          );
+          const re = new RegExp(
+            `(?<![\\p{L}\\p{N}])${escaped.join("[\\s\\p{P}]+")}(?![\\p{L}\\p{N}])`,
+            "gu",
+          );
+          let m = re.exec(norm);
+          while (m !== null) {
+            matches.push({
+              start: m.index,
+              end: m.index + m[0].length,
+              term: cleanTerm,
+              isPhrase: true,
+            });
+            m = re.exec(norm);
+          }
+        } else {
+          findSingleTokenMatches(norm, tokens[0], cleanTerm, matches);
         }
       } else {
-        let pos = 0;
-        while (true) {
-          pos = norm.indexOf(cleanTerm, pos);
-          if (pos === -1) break;
-          const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
-          const atEnd =
-            pos + cleanTerm.length >= norm.length ||
-            !isWordChar(norm[pos + cleanTerm.length]);
-          if (atStart && atEnd) {
-            ranges.push([pos, pos + cleanTerm.length]);
-            pos += cleanTerm.length;
-          } else {
-            pos += 1;
-          }
-        }
+        findSingleTokenMatches(norm, cleanTerm, cleanTerm, matches);
       }
     }
-    return ranges;
+    return matches;
+  }
+
+  function findWordRanges(text, terms) {
+    return collectTermMatches(text, terms).map((m) => [m.start, m.end]);
   }
 
   function highlightTerms(text, terms) {
@@ -436,7 +545,9 @@
     return out;
   }
 
-  function clipAtWordBoundary(text, start, end, hasPrefix) {
+  const MAX_SNIPPET_WINDOWS = 25;
+
+  function clipWindowAtWordBoundary(text, start, end, hasPrefix) {
     let s = start;
     let e = Math.min(text.length, end);
     let prefix = "";
@@ -463,83 +574,47 @@
       suffix = "…";
     }
 
-    return prefix + text.slice(s, e).trim() + suffix;
+    return {
+      snippet: prefix + text.slice(s, e).trim() + suffix,
+      start: s,
+      end: e,
+    };
   }
 
-  function extractSnippet(file, terms, maxLength = 160) {
+  function clipAtWordBoundary(text, start, end, hasPrefix) {
+    return clipWindowAtWordBoundary(text, start, end, hasPrefix).snippet;
+  }
+
+  function extractSnippetWindows(
+    file,
+    terms,
+    maxLength = 160,
+    maxWindows = MAX_SNIPPET_WINDOWS,
+  ) {
     const text = file.text || "";
     if (!text.trim()) {
       if (file.headings && file.headings.length > 0) {
-        return file.headings
-          .map((h) => h.text)
-          .slice(0, 3)
-          .join(" • ");
+        return [
+          file.headings
+            .map((h) => h.text)
+            .slice(0, 3)
+            .join(" • "),
+        ];
       }
-      return file.title || "";
+      return [file.title || ""];
     }
 
-    const norm = normalizeText(text);
-    const matches = [];
-
-    for (const term of terms) {
-      if (!term) continue;
-      const cleanTerm = normalizeText(term).trim();
-      if (!cleanTerm) continue;
-
-      if (/\s/.test(cleanTerm)) {
-        const tokens = cleanTerm.split(/\s+/).filter(Boolean);
-        const escaped = tokens.map((t) =>
-          t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        );
-        const re = new RegExp(
-          `(?<![\\p{L}\\p{N}])${escaped.join("\\s+")}(?![\\p{L}\\p{N}])`,
-          "gu",
-        );
-        let m = re.exec(norm);
-        while (m !== null) {
-          matches.push({
-            start: m.index,
-            end: m.index + m[0].length,
-            term: cleanTerm,
-            isPhrase: true,
-          });
-          m = re.exec(norm);
-        }
-      } else {
-        let pos = 0;
-        while (true) {
-          pos = norm.indexOf(cleanTerm, pos);
-          if (pos === -1) break;
-          const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
-          const atEnd =
-            pos + cleanTerm.length >= norm.length ||
-            !isWordChar(norm[pos + cleanTerm.length]);
-          if (atStart && atEnd) {
-            matches.push({
-              start: pos,
-              end: pos + cleanTerm.length,
-              term: cleanTerm,
-              isPhrase: false,
-            });
-            pos += cleanTerm.length;
-          } else {
-            pos += 1;
-          }
-        }
-      }
-    }
+    const matches = collectTermMatches(text, terms);
 
     // Title/heading match or no body matches -> start of document text
     if (matches.length === 0) {
-      return clipAtWordBoundary(text, 0, maxLength, false);
+      return [clipAtWordBoundary(text, 0, maxLength, false)];
     }
 
-    matches.sort((a, b) => a.start - b.start);
+    matches.sort((a, b) => a.start - b.start || b.end - a.end);
 
-    // Best-occurrence selection: find window with highest term diversity & count
-    let bestScore = -1;
-    let bestMatchIdx = 0;
-
+    // Score each match window by term diversity, hit count, and phrase presence
+    const scored = [];
     for (let i = 0; i < matches.length; i++) {
       const winStart = matches[i].start;
       const winEnd = winStart + maxLength;
@@ -552,20 +627,47 @@
         if (matches[j].isPhrase) hasPhrase = true;
       }
       const score = coveredTerms.size * 100 + count + (hasPhrase ? 500 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatchIdx = i;
+      scored.push({ idx: i, score });
+    }
+
+    scored.sort((a, b) => b.score - a.score || a.idx - b.idx);
+
+    const windows = [];
+    const seenSnippets = new Set();
+    const coveredRanges = [];
+    const isCovered = (m) =>
+      coveredRanges.some(([rs, re]) => m.start >= rs && m.end <= re);
+
+    for (const candidate of scored) {
+      if (windows.length >= maxWindows) break;
+      const targetMatch = matches[candidate.idx];
+      if (isCovered(targetMatch)) continue;
+
+      const targetStart = Math.max(0, targetMatch.start - 35);
+      const clipped = clipWindowAtWordBoundary(
+        text,
+        targetStart,
+        targetStart + maxLength,
+        targetStart > 0,
+      );
+      coveredRanges.push([
+        Math.min(clipped.start, targetMatch.start),
+        Math.max(clipped.end, targetMatch.end),
+      ]);
+
+      if (!seenSnippets.has(clipped.snippet)) {
+        seenSnippets.add(clipped.snippet);
+        windows.push(clipped.snippet);
       }
     }
 
-    const targetMatch = matches[bestMatchIdx];
-    const targetStart = Math.max(0, targetMatch.start - 35);
-    return clipAtWordBoundary(
-      text,
-      targetStart,
-      targetStart + maxLength,
-      targetStart > 0,
-    );
+    return windows.length > 0
+      ? windows
+      : [clipAtWordBoundary(text, 0, maxLength, false)];
+  }
+
+  function extractSnippet(file, terms, maxLength = 160) {
+    return extractSnippetWindows(file, terms, maxLength, 1)[0];
   }
 
   function resultButtons() {
@@ -584,7 +686,7 @@
   }
 
   function parseSearchQuery(rawQuery) {
-    const query = (rawQuery || "").trim();
+    const query = (rawQuery || "").replace(/[\u201c\u201d]/g, '"').trim();
     if (!query) {
       return {
         query: "",
@@ -592,20 +694,21 @@
         unquotedTokens: [],
         allTerms: [],
         contiguousPhrases: [],
+        copyText: "",
       };
     }
 
     const exactPhrases = [];
-    const phraseRegex = /"([^"]+)"|'([^']+)'/g;
-    let remaining = query.replace(phraseRegex, (_match, p1, p2) => {
-      const phrase = (p1 || p2).trim();
+    const phraseRegex = /"([^"]+)"/g;
+    let remaining = query.replace(phraseRegex, (_match, p1) => {
+      const phrase = p1.trim();
       if (phrase) {
         exactPhrases.push(phrase);
       }
       return " ";
     });
 
-    const unclosedMatch = remaining.match(/["']([^"']+)$/);
+    const unclosedMatch = remaining.match(/"([^"]+)$/);
     if (unclosedMatch?.[1].trim()) {
       exactPhrases.push(unclosedMatch[1].trim());
       remaining = remaining.slice(0, unclosedMatch.index);
@@ -632,12 +735,18 @@
       contiguousPhrases.push(unquotedTokens.join(" "));
     }
 
+    const copyText =
+      exactPhrases.length > 0
+        ? exactPhrases[0]
+        : query.replace(/"/g, "").trim();
+
     return {
       query,
       exactPhrases,
       unquotedTokens,
       allTerms,
       contiguousPhrases,
+      copyText,
     };
   }
 
@@ -651,7 +760,7 @@
     let hits = [];
     if (miniSearch) {
       const searchOptions = {
-        boost: { title: 5, headings: 2, text: 1 },
+        boost: SEARCH_BOOST,
         prefix: (_term, index, terms) => index === terms.length - 1,
         combineWith: "AND",
       };
@@ -668,11 +777,12 @@
     } else {
       for (const f of MANIFEST.files) {
         const titleNorm = normalizeText(f.title);
+        const relpathNorm = normalizeText(f.relpath);
         const textNorm = normalizeText(f.text);
         const headingsNorm = (f.headings || [])
           .map((h) => normalizeText(h.text))
           .join(" ");
-        const allDocNorm = `${titleNorm} ${headingsNorm} ${textNorm}`;
+        const allDocNorm = `${titleNorm} ${relpathNorm} ${headingsNorm} ${textNorm}`;
 
         const allMatched = parsed.allTerms.every((term) => {
           const re = makePhraseRegex(term);
@@ -692,6 +802,7 @@
         for (const term of parsed.allTerms) {
           const re = makePhraseRegex(term);
           if (re?.test(titleNorm)) score += 5;
+          else if (re?.test(relpathNorm)) score += 3;
           else if (re?.test(headingsNorm)) score += 2;
         }
 
@@ -741,6 +852,7 @@
           : "No matches";
       searchResults.innerHTML = `<div class="search-empty">${escapeHtml(emptyMsg)}</div>`;
     } else {
+      const resultEntries = [];
       searchResults.innerHTML = top
         .map((r) => {
           const file = fileById(r.id);
@@ -749,19 +861,35 @@
             ...parsed.contiguousPhrases,
             ...Array.from(new Set([...parsed.allTerms, ...(r.terms || [])])),
           ];
-          const snippet = extractSnippet(file, matchTerms);
+          const windows = extractSnippetWindows(file, matchTerms);
+          resultEntries.push({ windows, matchTerms });
+          const pagerHtml =
+            windows.length > 1
+              ? `<span class="sr-pager">` +
+                `<button type="button" class="sr-nav-btn sr-prev" tabindex="-1" aria-label="Previous match preview" title="Previous match (←)">&#8249;</button>` +
+                `<span class="sr-count">1 / ${windows.length}</span>` +
+                `<button type="button" class="sr-nav-btn sr-next" tabindex="-1" aria-label="Next match preview" title="Next match (→)">&#8250;</button>` +
+                `</span>`
+              : "";
+          const pathHtml = file.relpath
+            ? `<span class="sr-path">${highlightTerms(file.relpath, matchTerms)}</span>`
+            : "";
           return `
-        <button type="button" class="search-result" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}" data-hl="${escapeHtml(query)}">
-          <span class="sr-title"><span class="type-icon">${iconFor(file.type)}</span>${highlightTerms(file.title, matchTerms)}</span>
-          <span class="sr-snippet">${highlightTerms(snippet, matchTerms)}</span>
-        </button>
+        <div class="search-result" role="option" tabindex="0" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}" data-hl="${escapeHtml(query)}">
+          <span class="sr-title"><span class="sr-title-main"><span class="type-icon">${iconFor(file.type)}</span><span class="sr-title-text">${highlightTerms(file.title, matchTerms)}</span></span>${pagerHtml}</span>
+          ${pathHtml}
+          <span class="sr-snippet">${highlightTerms(windows[0], matchTerms)}</span>
+        </div>
       `;
         })
         .join("");
 
       const buttons = resultButtons();
       buttons.forEach((btn, index) => {
-        btn.addEventListener("click", () => {
+        const entry = resultEntries[index] || { windows: [], matchTerms: [] };
+        let previewIdx = 0;
+
+        function openResult() {
           let terms = [];
           try {
             terms = JSON.parse(btn.dataset.terms || "[]");
@@ -769,6 +897,41 @@
             terms = [];
           }
           activateResult(btn.dataset.id, terms, btn.dataset.hl);
+        }
+
+        function stepPreview(delta) {
+          const total = entry.windows.length;
+          if (total <= 1) return;
+          previewIdx = (previewIdx + delta + total) % total;
+          const snippetEl = btn.querySelector(".sr-snippet");
+          const countEl = btn.querySelector(".sr-count");
+          if (snippetEl) {
+            snippetEl.innerHTML = highlightTerms(
+              entry.windows[previewIdx],
+              entry.matchTerms,
+            );
+          }
+          if (countEl) {
+            countEl.textContent = `${previewIdx + 1} / ${total}`;
+          }
+        }
+
+        const prevBtn = btn.querySelector(".sr-prev");
+        const nextBtn = btn.querySelector(".sr-next");
+        prevBtn?.addEventListener("mousedown", (e) => e.preventDefault());
+        nextBtn?.addEventListener("mousedown", (e) => e.preventDefault());
+        prevBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          stepPreview(-1);
+        });
+        nextBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          stepPreview(1);
+        });
+
+        btn.addEventListener("click", (e) => {
+          if (e?.target?.closest?.(".sr-nav-btn")) return;
+          openResult();
         });
         btn.addEventListener("keydown", (e) => {
           if (e.key === "ArrowDown") {
@@ -781,11 +944,23 @@
             } else {
               focusResult(index - 1);
             }
+          } else if (e.key === "ArrowRight") {
+            if (entry.windows.length > 1) {
+              e.preventDefault();
+              stepPreview(1);
+            }
+          } else if (e.key === "ArrowLeft") {
+            if (entry.windows.length > 1) {
+              e.preventDefault();
+              stepPreview(-1);
+            }
+          } else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openResult();
           } else if (e.key === "Escape") {
             closeResults();
             searchInput?.focus();
           }
-          // Enter / Space fall through to the native <button> click.
         });
       });
     }
@@ -828,9 +1003,31 @@
     }
   });
 
-  doc?.addEventListener("click", (e) => {
-    if (!e.target.closest(".search-wrap")) closeResults();
-  });
+  function bindResponsiveListeners() {
+    navToggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleNavDrawer();
+    });
+    drawerBackdrop?.addEventListener("click", () => {
+      closeNavDrawer();
+    });
+    tocToggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleTocPopover();
+    });
+    doc?.addEventListener("click", (e) => {
+      if (!e.target?.closest?.(".search-wrap")) closeResults();
+      if (!e.target?.closest?.(".toc-dropdown-wrap")) closeTocPopover();
+    });
+    doc?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeNavDrawer();
+        closeTocPopover();
+      }
+    });
+  }
+
+  bindResponsiveListeners();
 
   // --- Dark mode -------------------------------------------------------------
 
@@ -900,11 +1097,17 @@
   if (leftPanel) renderFileList();
 
   function _setEnv(d, w) {
+    clearTimeout(toastTimer);
     doc = d;
     win = w;
     contentFrame = doc?.getElementById("content-frame") || null;
     leftPanel = doc?.getElementById("left-panel") || null;
+    drawerBackdrop = doc?.getElementById("drawer-backdrop") || null;
+    navToggleBtn = doc?.getElementById("nav-toggle-btn") || null;
     tocBody = doc?.getElementById("toc-body") || null;
+    tocToggleBtn = doc?.getElementById("toc-toggle-btn") || null;
+    tocPopover = doc?.getElementById("toc-popover") || null;
+    tocPopoverBody = doc?.getElementById("toc-popover-body") || null;
     searchInput = doc?.getElementById("search-input") || null;
     searchResults = doc?.getElementById("search-results") || null;
     darkToggle = doc?.getElementById("dark-toggle") || null;
@@ -921,11 +1124,20 @@
       findWordRanges,
       highlightTerms,
       extractSnippet,
+      extractSnippetWindows,
       searchDocuments,
       runSearch,
       hasExactPhrase,
       scorePhraseMatch,
       initMiniSearch,
+      renderFileList,
+      renderToc,
+      selectFile,
+      toggleNavDrawer,
+      closeNavDrawer,
+      toggleTocPopover,
+      closeTocPopover,
+      bindResponsiveListeners,
       setManifest: (m) => {
         MANIFEST.files = m.files || [];
       },
