@@ -109,7 +109,7 @@ def test_cli_version() -> None:
             main(["--version"])
         except SystemExit as exc:
             assert exc.code == 0
-    assert "docs-site 0.3.0" in stdout_buf.getvalue()
+    assert "docs-site 0.4.0" in stdout_buf.getvalue()
 
 
 def test_cli_help_documents_title_source() -> None:
