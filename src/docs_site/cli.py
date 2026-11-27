@@ -14,7 +14,7 @@ from .site_builder import build_site
 try:
     __version__ = importlib.metadata.version("docs-site")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 
 
 def _find_matching_entry(

@@ -3,6 +3,7 @@
 Thank you for helping improve `docs-site`! This guide covers local setup, testing, code quality checks, and an overview of the project's architecture.
 
 ## Table of Contents
+
 - [Contributing to docs-site](#contributing-to-docs-site)
   - [Table of Contents](#table-of-contents)
   - [Prerequisites](#prerequisites)
@@ -17,6 +18,7 @@ Thank you for helping improve `docs-site`! This guide covers local setup, testin
 ## Prerequisites
 
 Ensure you have the following tools installed before getting started:
+
 - **[uv](https://docs.astral.sh/uv/)** (Python package & environment management)
 - **[Node.js](https://nodejs.org/)** (for running Biome JS/CSS tooling via `npx`)
 
@@ -54,9 +56,9 @@ npm test
 
 This project uses:
 
-- **[Ruff](https://docs.astral.sh/ruff/?utm_source=gemini)** for Python
-- **[djLint](https://djlint.com/?utm_source=gemini)** for Jinja templates (`pyproject.toml`)
-- **[Biome](https://biomejs.dev/?utm_source=gemini)** for JavaScript & CSS (`biome.json`)
+- **[Ruff](https://docs.astral.sh/ruff/)** for Python
+- **[djLint](https://djlint.com/)** for Jinja templates (`pyproject.toml`)
+- **[Biome](https://biomejs.dev/)** for JavaScript & CSS (`biome.json`)
 
 ### Run Lint Checks
 
