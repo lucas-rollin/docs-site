@@ -218,9 +218,11 @@
     } else if (file.type === "pdf") {
       let combinedHash = hash || "";
       if (highlightParam) {
-        const pdfQuery =
-          parseSearchQuery(highlightParam).copyText || highlightParam;
-        const searchParam = `search=${encodeURIComponent(pdfQuery)}`;
+        const parsedPdf = parseSearchQuery(highlightParam);
+        const pdfQuery = parsedPdf.copyText || highlightParam;
+        const phraseFlag =
+          parsedPdf.exactPhrases.length > 0 ? "&phrase=true" : "";
+        const searchParam = `search=${encodeURIComponent(pdfQuery)}${phraseFlag}`;
         if (combinedHash) {
           const stripped = combinedHash.startsWith("#")
             ? combinedHash.slice(1)
@@ -824,6 +826,45 @@
     return hits;
   }
 
+  function buildMatchTerms(parsed, hit) {
+    if (parsed.exactPhrases.length === 0) {
+      return [
+        ...parsed.contiguousPhrases,
+        ...Array.from(new Set([...parsed.allTerms, ...(hit?.terms || [])])),
+      ];
+    }
+
+    const unquotedNorms = parsed.unquotedTokens
+      .map(normalizeText)
+      .filter(Boolean);
+    const seenNorms = new Set(unquotedNorms);
+    const matchedUnquoted = [];
+    if (unquotedNorms.length > 0 && hit?.terms) {
+      const lastUnquoted = unquotedNorms[unquotedNorms.length - 1];
+      const lastAllNorm = normalizeText(
+        parsed.allTerms[parsed.allTerms.length - 1],
+      );
+      if (lastUnquoted && lastAllNorm === lastUnquoted) {
+        for (const term of hit.terms) {
+          const norm = normalizeText(term);
+          if (seenNorms.has(norm)) continue;
+          if (norm.startsWith(lastUnquoted)) {
+            seenNorms.add(norm);
+            matchedUnquoted.push(term);
+          }
+        }
+      }
+    }
+
+    return Array.from(
+      new Set([
+        ...parsed.exactPhrases,
+        ...parsed.unquotedTokens,
+        ...matchedUnquoted,
+      ]),
+    );
+  }
+
   function runSearch(rawQuery) {
     const query = rawQuery.trim();
     lastQuery = query;
@@ -857,10 +898,7 @@
         .map((r) => {
           const file = fileById(r.id);
           if (!file) return "";
-          const matchTerms = [
-            ...parsed.contiguousPhrases,
-            ...Array.from(new Set([...parsed.allTerms, ...(r.terms || [])])),
-          ];
+          const matchTerms = buildMatchTerms(parsed, r);
           const windows = extractSnippetWindows(file, matchTerms);
           resultEntries.push({ windows, matchTerms });
           const pagerHtml =

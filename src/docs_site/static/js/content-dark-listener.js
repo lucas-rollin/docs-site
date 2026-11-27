@@ -203,7 +203,10 @@
     if (exactPhrases.length > 0) {
       return {
         phrases: exactPhrases,
-        tokens: allTokens,
+        tokens:
+          unquotedTokens.length > 0
+            ? Array.from(new Set(unquotedTokens))
+            : allTokens,
         exactOnly: unquotedTokens.length === 0,
       };
     }

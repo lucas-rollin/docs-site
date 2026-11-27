@@ -299,7 +299,7 @@ test("Clipboard-assisted search transition in shell.js", async () => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.strictEqual(copiedText, "installation guide");
 
-  // Quoted PDF query strips quotes from #search=
+  // Quoted PDF query strips quotes from #search= and adds &phrase=true
   shell.activateResult(
     "doc-pdf",
     ["installation guide", "installation", "guide"],
@@ -307,7 +307,21 @@ test("Clipboard-assisted search transition in shell.js", async () => {
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.strictEqual(copiedText, "installation guide");
-  assert.ok(contentFrame.src.includes("manual.pdf#search=installation%20guide"));
+  assert.ok(
+    contentFrame.src.includes(
+      "manual.pdf#search=installation%20guide&phrase=true",
+    ),
+  );
+
+  // Unquoted multi-word PDF query does not set &phrase=true
+  shell.activateResult(
+    "doc-pdf",
+    ["installation", "guide"],
+    "installation guide",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.ok(contentFrame.src.endsWith("manual.pdf#search=installation%20guide"));
+  assert.ok(!contentFrame.src.includes("phrase=true"));
 });
 
 test("Apostrophes and contractions are not treated as quote delimiters", () => {
@@ -799,4 +813,184 @@ test("Responsive drawer and TOC popover sync and close cleanly", () => {
   for (const fn of docListeners.keydown || []) fn({ key: "Escape" });
   assert.strictEqual(tocPopover.classList.contains("open"), false);
 });
+
+test("Exact quoted search only highlights and counts exact phrases in dropdown previews", () => {
+  function makeMockResultEl(bodyHtml) {
+    const listeners = {};
+    const hasPager = bodyHtml.includes("sr-pager");
+    const countMatch = bodyHtml.match(/<span class="sr-count">([^<]*)<\/span>/);
+    const titleMatch = bodyHtml.match(
+      /<span class="sr-title-text">([\s\S]*?)<\/span>/,
+    );
+    const pathMatch = bodyHtml.match(/<span class="sr-path">([\s\S]*?)<\/span>/);
+    const snippetMatch = bodyHtml.match(
+      /<span class="sr-snippet">([\s\S]*?)<\/span>/,
+    );
+
+    const makeSubEl = (initial) => {
+      const subListeners = {};
+      return {
+        textContent: initial,
+        innerHTML: initial,
+        addEventListener: (ev, fn) => {
+          subListeners[ev] = subListeners[ev] || [];
+          subListeners[ev].push(fn);
+        },
+        dispatch: (ev, eventObj = {}) => {
+          for (const fn of subListeners[ev] || []) fn(eventObj);
+        },
+      };
+    };
+
+    const prevBtn = hasPager ? makeSubEl("‹") : null;
+    const nextBtn = hasPager ? makeSubEl("›") : null;
+    const countEl = hasPager ? makeSubEl(countMatch ? countMatch[1] : "") : null;
+    const titleEl = makeSubEl(titleMatch ? titleMatch[1] : "");
+    const pathEl = makeSubEl(pathMatch ? pathMatch[1] : "");
+    const snippetEl = makeSubEl(snippetMatch ? snippetMatch[1] : "");
+
+    return {
+      addEventListener: (ev, fn) => {
+        listeners[ev] = listeners[ev] || [];
+        listeners[ev].push(fn);
+      },
+      querySelector: (sel) => {
+        if (sel === ".sr-prev") return prevBtn;
+        if (sel === ".sr-next") return nextBtn;
+        if (sel === ".sr-count") return countEl;
+        if (sel === ".sr-title-text") return titleEl;
+        if (sel === ".sr-path") return pathEl;
+        if (sel === ".sr-snippet") return snippetEl;
+        return null;
+      },
+      dispatch: (ev, eventObj = {}) => {
+        for (const fn of listeners[ev] || []) fn(eventObj);
+      },
+    };
+  }
+
+  let parsedResults = [];
+  const searchResults = {
+    _html: "",
+    classes: new Set(),
+    classList: {
+      add: (c) => searchResults.classes.add(c),
+      remove: (c) => searchResults.classes.delete(c),
+      contains: (c) => searchResults.classes.has(c),
+    },
+    set innerHTML(val) {
+      this._html = val;
+      parsedResults = [];
+      const re = /<div class="search-result"[^>]*>([\s\S]*?)<\/div>/g;
+      let m = re.exec(val);
+      while (m !== null) {
+        parsedResults.push(makeMockResultEl(m[1]));
+        m = re.exec(val);
+      }
+    },
+    get innerHTML() {
+      return this._html;
+    },
+    querySelectorAll: (sel) => (sel === ".search-result" ? parsedResults : []),
+    querySelector: (sel) =>
+      sel === ".search-result" ? parsedResults[0] || null : null,
+  };
+
+  const mockDocument = {
+    getElementById: (id) => (id === "search-results" ? searchResults : null),
+  };
+
+  const filler = "padding ".repeat(35);
+  const files = [
+    {
+      id: "doc-two",
+      title: "History of Europe",
+      relpath: "europe/of-france.md",
+      src: "pages/doc-two.html",
+      type: "html",
+      headings: [],
+      text:
+        `The geography of Europe features the Map of France here. ` +
+        `${filler}` +
+        `A middle section speaks of rivers of Europe and of France alone. ` +
+        `${filler}` +
+        `Another Map of France sits near the end of this guide.`,
+    },
+    {
+      id: "doc-one",
+      title: "Travel Notes of Interest",
+      relpath: "notes/france.md",
+      src: "pages/doc-one.html",
+      type: "html",
+      headings: [],
+      text:
+        `Only one Map of France appears here, ` +
+        `${filler}` +
+        `while plenty of references to France and map of regions follow.`,
+    },
+  ];
+
+  shell.setManifest({ files });
+  shell.initMiniSearch(files);
+  shell._setEnv(mockDocument, {});
+
+  // Quoted search: only exact phrase matches count and highlight
+  shell.runSearch('"Map of France"');
+  assert.strictEqual(parsedResults.length, 2);
+
+  const twoEl = parsedResults[0];
+  const oneEl = parsedResults[1];
+
+  // doc-two has 2 exact phrase matches (not 3+ from standalone "of" / "France")
+  assert.strictEqual(twoEl.querySelector(".sr-count").textContent, "1 / 2");
+  // doc-one has only 1 exact phrase match -> no pager
+  assert.strictEqual(oneEl.querySelector(".sr-count"), null);
+
+  // Title and path do not highlight standalone "of" or "france"
+  assert.strictEqual(
+    twoEl.querySelector(".sr-title-text").innerHTML,
+    "History of Europe",
+  );
+  assert.strictEqual(
+    twoEl.querySelector(".sr-path").innerHTML,
+    "europe/of-france.md",
+  );
+
+  // Snippet highlights only the exact phrase, never standalone "of"
+  const firstSnippet = twoEl.querySelector(".sr-snippet").innerHTML;
+  assert.ok(firstSnippet.includes("<mark>Map of France</mark>"));
+  assert.ok(!firstSnippet.includes("<mark>of</mark>"));
+
+  // ArrowRight steps directly to the second exact phrase occurrence (skipping standalone "of" / "France" section)
+  twoEl.dispatch("keydown", { key: "ArrowRight", preventDefault: () => {} });
+  assert.strictEqual(twoEl.querySelector(".sr-count").textContent, "2 / 2");
+  const secondSnippet = twoEl.querySelector(".sr-snippet").innerHTML;
+  assert.ok(secondSnippet.includes("<mark>Map of France</mark>"));
+  assert.ok(!secondSnippet.includes("<mark>of</mark>"));
+
+  // Mixed query: exact phrase + unquoted token highlights exact phrase and unquoted token only
+  shell.runSearch('rivers "Map of France"');
+  assert.strictEqual(parsedResults.length, 1);
+  const mixedEl = parsedResults[0];
+  assert.strictEqual(mixedEl.querySelector(".sr-count").textContent, "1 / 3");
+  assert.strictEqual(
+    mixedEl.querySelector(".sr-title-text").innerHTML,
+    "History of Europe",
+  );
+
+  // Unquoted query still highlights individual terms and finds fragmented matches
+  shell.runSearch("Map of France");
+  assert.strictEqual(parsedResults[0].querySelector(".sr-count").textContent, "1 / 3");
+  assert.strictEqual(
+    parsedResults[0].querySelector(".sr-title-text").innerHTML,
+    "History <mark>of</mark> Europe",
+  );
+
+  // Mixed query in content-dark-listener.js does not leak quoted phrase tokens into Pass 2 tokens
+  const mixedHl = listener.parseHighlightQuery('rivers "Map of France"');
+  assert.deepStrictEqual(mixedHl.phrases, ["Map of France"]);
+  assert.deepStrictEqual(mixedHl.tokens, ["rivers"]);
+  assert.strictEqual(mixedHl.exactOnly, false);
+});
+
 
