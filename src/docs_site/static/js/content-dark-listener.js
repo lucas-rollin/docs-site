@@ -37,12 +37,31 @@
     return { norm, map };
   }
 
-  function findSingleTokenMatchesInNorm(norm, map, token, ranges) {
+  function findSingleTokenMatchesInNorm(
+    norm,
+    map,
+    token,
+    ranges,
+    isPrefix = false,
+  ) {
     let pos = 0;
     while (true) {
       pos = norm.indexOf(token, pos);
       if (pos === -1) break;
       const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+      if (isPrefix) {
+        if (atStart) {
+          let normEnd = pos + token.length;
+          while (normEnd < norm.length && isWordChar(norm[normEnd])) {
+            normEnd++;
+          }
+          ranges.push([map[pos], map[normEnd - 1] + 1]);
+          pos = normEnd;
+        } else {
+          pos += 1;
+        }
+        continue;
+      }
       const atEnd =
         pos + token.length >= norm.length ||
         !isWordChar(norm[pos + token.length]);
@@ -65,17 +84,21 @@
     const ranges = [];
     for (const term of cleanTerms) {
       if (!term) continue;
-      const cleanTerm = term
+      const rawNorm = term
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .trim();
+      if (!rawNorm) continue;
+
+      const isPrefix = rawNorm.length > 1 && rawNorm.endsWith("*");
+      const cleanTerm = isPrefix ? rawNorm.replace(/\*+$/, "") : rawNorm;
       if (!cleanTerm) continue;
 
       if (/[\s\p{P}]/u.test(cleanTerm)) {
         const tokens = cleanTerm.split(/[\s\p{P}]+/u).filter(Boolean);
         if (tokens.length === 0) continue;
-        if (tokens.length > 1) {
+        if (tokens.length > 1 && !isPrefix) {
           const escaped = tokens.map((t) =>
             t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           );
@@ -90,11 +113,21 @@
             ranges.push([map[normStart], map[normEnd - 1] + 1]);
             m = re.exec(norm);
           }
+        } else if (tokens.length === 1) {
+          findSingleTokenMatchesInNorm(norm, map, tokens[0], ranges, isPrefix);
         } else {
-          findSingleTokenMatchesInNorm(norm, map, tokens[0], ranges);
+          for (let ti = 0; ti < tokens.length; ti++) {
+            findSingleTokenMatchesInNorm(
+              norm,
+              map,
+              tokens[ti],
+              ranges,
+              isPrefix && ti === tokens.length - 1,
+            );
+          }
         }
       } else {
-        findSingleTokenMatchesInNorm(norm, map, cleanTerm, ranges);
+        findSingleTokenMatchesInNorm(norm, map, cleanTerm, ranges, isPrefix);
       }
     }
 
@@ -171,23 +204,72 @@
     if (!trimmed) return { phrases: [], tokens: [], exactOnly: false };
 
     const exactPhrases = [];
-    const phraseRegex = /"([^"]+)"/g;
-    let remaining = trimmed.replace(phraseRegex, (_match, p1) => {
-      const phrase = p1.trim();
-      if (phrase) exactPhrases.push(phrase);
-      return " ";
-    });
+    const unquotedTokens = [];
+    let hasOr = false;
+    let i = 0;
 
-    const unclosedMatch = remaining.match(/"([^"]+)$/);
-    if (unclosedMatch?.[1].trim()) {
-      exactPhrases.push(unclosedMatch[1].trim());
-      remaining = remaining.slice(0, unclosedMatch.index);
+    while (i < trimmed.length) {
+      while (i < trimmed.length && /\s/.test(trimmed[i])) i++;
+      if (i >= trimmed.length) break;
+
+      let negated = false;
+      if (
+        trimmed[i] === "-" &&
+        i + 1 < trimmed.length &&
+        !/\s/.test(trimmed[i + 1])
+      ) {
+        negated = true;
+        i++;
+      }
+
+      let scoped = false;
+      const fieldMatch = trimmed.slice(i).match(/^(title|path|type):/i);
+      if (
+        fieldMatch &&
+        i + fieldMatch[0].length < trimmed.length &&
+        !/\s/.test(trimmed[i + fieldMatch[0].length])
+      ) {
+        scoped = true;
+        i += fieldMatch[0].length;
+      }
+
+      if (trimmed[i] === '"') {
+        const closeIdx = trimmed.indexOf('"', i + 1);
+        const phrase = (
+          closeIdx !== -1
+            ? trimmed.slice(i + 1, closeIdx)
+            : trimmed.slice(i + 1)
+        ).trim();
+        i = closeIdx !== -1 ? closeIdx + 1 : trimmed.length;
+        if (phrase && !negated && !scoped) {
+          exactPhrases.push(phrase);
+        }
+        continue;
+      }
+
+      const start = i;
+      while (i < trimmed.length && !/[\s"]/.test(trimmed[i])) i++;
+      const rawTok = trimmed.slice(start, i);
+      if (!rawTok) continue;
+
+      if (!negated && !scoped && rawTok === "OR") {
+        hasOr = true;
+        continue;
+      }
+      if (negated || scoped) continue;
+
+      const hasWildcard = rawTok.endsWith("*");
+      const withoutStar = hasWildcard ? rawTok.replace(/\*+$/, "") : rawTok;
+      const parts = withoutStar
+        .split(/[\s\p{P}]+/u)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      for (let pi = 0; pi < parts.length; pi++) {
+        const tok =
+          hasWildcard && pi === parts.length - 1 ? `${parts[pi]}*` : parts[pi];
+        unquotedTokens.push(tok);
+      }
     }
-
-    const unquotedTokens = remaining
-      .split(/[\s\p{P}]+/u)
-      .map((t) => t.trim())
-      .filter(Boolean);
 
     const phraseTokens = [];
     for (const ph of exactPhrases) {
@@ -198,20 +280,19 @@
       phraseTokens.push(...t);
     }
 
-    const allTokens = Array.from(new Set([...unquotedTokens, ...phraseTokens]));
+    const uniqueUnquoted = Array.from(new Set(unquotedTokens));
+    const allTokens = Array.from(new Set([...uniqueUnquoted, ...phraseTokens]));
 
     if (exactPhrases.length > 0) {
       return {
         phrases: exactPhrases,
-        tokens:
-          unquotedTokens.length > 0
-            ? Array.from(new Set(unquotedTokens))
-            : allTokens,
-        exactOnly: unquotedTokens.length === 0,
+        tokens: uniqueUnquoted.length > 0 ? uniqueUnquoted : allTokens,
+        exactOnly: uniqueUnquoted.length === 0,
       };
     }
 
-    const phrases = unquotedTokens.length > 1 ? [unquotedTokens.join(" ")] : [];
+    const phrases =
+      !hasOr && uniqueUnquoted.length > 1 ? [uniqueUnquoted.join(" ")] : [];
     return {
       phrases,
       tokens: allTokens,

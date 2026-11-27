@@ -411,10 +411,16 @@
     );
   }
 
-  function hasExactPhrase(file, phrase) {
+  function hasExactPhrase(file, phrase, field = null) {
     if (!file || !phrase) return false;
     const re = makePhraseRegex(phrase);
     if (!re) return false;
+    if (field === "title") {
+      return Boolean(file.title && re.test(normalizeText(file.title)));
+    }
+    if (field === "path") {
+      return Boolean(file.relpath && re.test(normalizeText(file.relpath)));
+    }
     if (file.title && re.test(normalizeText(file.title))) return true;
     if (file.relpath && re.test(normalizeText(file.relpath))) return true;
     if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
@@ -444,12 +450,36 @@
     return boost;
   }
 
-  function findSingleTokenMatches(norm, token, termLabel, matches) {
+  function findSingleTokenMatches(
+    norm,
+    token,
+    termLabel,
+    matches,
+    isPrefix = false,
+  ) {
     let pos = 0;
     while (true) {
       pos = norm.indexOf(token, pos);
       if (pos === -1) break;
       const atStart = pos === 0 || !isWordChar(norm[pos - 1]);
+      if (isPrefix) {
+        if (atStart) {
+          let end = pos + token.length;
+          while (end < norm.length && isWordChar(norm[end])) {
+            end++;
+          }
+          matches.push({
+            start: pos,
+            end,
+            term: termLabel,
+            isPhrase: false,
+          });
+          pos = end;
+        } else {
+          pos += 1;
+        }
+        continue;
+      }
       const atEnd =
         pos + token.length >= norm.length ||
         !isWordChar(norm[pos + token.length]);
@@ -474,13 +504,17 @@
 
     for (const term of terms) {
       if (!term) continue;
-      const cleanTerm = normalizeText(term).trim();
+      const rawNorm = normalizeText(term).trim();
+      if (!rawNorm) continue;
+
+      const isPrefix = rawNorm.length > 1 && rawNorm.endsWith("*");
+      const cleanTerm = isPrefix ? rawNorm.replace(/\*+$/, "") : rawNorm;
       if (!cleanTerm) continue;
 
       if (/[\s\p{P}]/u.test(cleanTerm)) {
         const tokens = cleanTerm.split(/[\s\p{P}]+/u).filter(Boolean);
         if (tokens.length === 0) continue;
-        if (tokens.length > 1) {
+        if (tokens.length > 1 && !isPrefix) {
           const escaped = tokens.map((t) =>
             t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           );
@@ -493,16 +527,26 @@
             matches.push({
               start: m.index,
               end: m.index + m[0].length,
-              term: cleanTerm,
+              term: rawNorm,
               isPhrase: true,
             });
             m = re.exec(norm);
           }
+        } else if (tokens.length === 1) {
+          findSingleTokenMatches(norm, tokens[0], rawNorm, matches, isPrefix);
         } else {
-          findSingleTokenMatches(norm, tokens[0], cleanTerm, matches);
+          for (let ti = 0; ti < tokens.length; ti++) {
+            findSingleTokenMatches(
+              norm,
+              tokens[ti],
+              rawNorm,
+              matches,
+              isPrefix && ti === tokens.length - 1,
+            );
+          }
         }
       } else {
-        findSingleTokenMatches(norm, cleanTerm, cleanTerm, matches);
+        findSingleTokenMatches(norm, cleanTerm, rawNorm, matches, isPrefix);
       }
     }
     return matches;
@@ -687,6 +731,205 @@
     searchResults?.classList.remove("open");
   }
 
+  const TYPE_ALIASES = {
+    md: "markdown",
+    markdown: "markdown",
+    htm: "html",
+    html: "html",
+    pdf: "pdf",
+  };
+
+  function canonicalDocType(raw) {
+    const key = String(raw || "")
+      .trim()
+      .toLowerCase();
+    return TYPE_ALIASES[key] || key;
+  }
+
+  function fieldsForQualifier(field) {
+    if (field === "title") return ["title"];
+    if (field === "path") return ["relpath", "filename"];
+    return null;
+  }
+
+  function splitWords(text) {
+    return String(text || "")
+      .split(/[\s\p{P}]+/u)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+
+  function tokenizeQuery(query) {
+    const branches = [[]];
+    let i = 0;
+    let hasOperators = false;
+    let lastItem = null;
+
+    while (i < query.length) {
+      while (i < query.length && /\s/.test(query[i])) i++;
+      if (i >= query.length) break;
+
+      let negated = false;
+      if (
+        query[i] === "-" &&
+        i + 1 < query.length &&
+        !/\s/.test(query[i + 1])
+      ) {
+        negated = true;
+        hasOperators = true;
+        i++;
+      }
+
+      let field = null;
+      const fieldMatch = query.slice(i).match(/^(title|path|type):/i);
+      if (
+        fieldMatch &&
+        i + fieldMatch[0].length < query.length &&
+        !/\s/.test(query[i + fieldMatch[0].length])
+      ) {
+        field = fieldMatch[1].toLowerCase();
+        hasOperators = true;
+        i += fieldMatch[0].length;
+      }
+
+      const currentBranch = branches[branches.length - 1];
+
+      if (query[i] === '"') {
+        const closeIdx = query.indexOf('"', i + 1);
+        const rawPhrase = (
+          closeIdx !== -1 ? query.slice(i + 1, closeIdx) : query.slice(i + 1)
+        ).trim();
+        i = closeIdx !== -1 ? closeIdx + 1 : query.length;
+        if (rawPhrase) {
+          if (field === "type") {
+            const item = {
+              kind: "type",
+              value: canonicalDocType(rawPhrase),
+              negated,
+            };
+            currentBranch.push(item);
+            lastItem = item;
+          } else {
+            const item = {
+              kind: "phrase",
+              value: rawPhrase,
+              field,
+              negated,
+            };
+            currentBranch.push(item);
+            lastItem = item;
+          }
+        }
+        continue;
+      }
+
+      const start = i;
+      while (i < query.length && !/[\s"]/.test(query[i])) i++;
+      const rawTok = query.slice(start, i);
+      if (!rawTok) continue;
+
+      if (!negated && !field && rawTok === "OR") {
+        hasOperators = true;
+        if (currentBranch.length > 0) {
+          branches.push([]);
+        }
+        lastItem = null;
+        continue;
+      }
+
+      if (field === "type") {
+        const item = {
+          kind: "type",
+          value: canonicalDocType(rawTok),
+          negated,
+        };
+        currentBranch.push(item);
+        lastItem = item;
+        continue;
+      }
+
+      const hasWildcard = rawTok.endsWith("*");
+      if (hasWildcard) hasOperators = true;
+      const withoutStar = hasWildcard ? rawTok.replace(/\*+$/, "") : rawTok;
+      const parts = splitWords(withoutStar);
+      if (parts.length === 0) continue;
+
+      if (negated && parts.length > 1) {
+        const item = {
+          kind: "phrase",
+          value: withoutStar,
+          field,
+          negated: true,
+        };
+        currentBranch.push(item);
+        lastItem = item;
+      } else {
+        for (let pi = 0; pi < parts.length; pi++) {
+          const item = {
+            kind: "term",
+            value: parts[pi],
+            prefix: hasWildcard && pi === parts.length - 1,
+            field,
+            negated,
+          };
+          currentBranch.push(item);
+          lastItem = item;
+        }
+      }
+    }
+
+    const nonEmptyBranches = branches.filter((b) => b.length > 0);
+    return { branches: nonEmptyBranches, hasOperators, lastItem };
+  }
+
+  function summarizeBranch(items, autoPrefixItem) {
+    const posTerms = [];
+    const posPhrases = [];
+    const posTypes = [];
+    const negTerms = [];
+    const negPhrases = [];
+    const negTypes = [];
+
+    for (const item of items) {
+      if (item.negated) {
+        if (item.kind === "term") negTerms.push(item);
+        else if (item.kind === "phrase") negPhrases.push(item);
+        else if (item.kind === "type") negTypes.push(item);
+      } else if (item.kind === "term") {
+        posTerms.push({
+          ...item,
+          autoPrefix: item === autoPrefixItem,
+        });
+      } else if (item.kind === "phrase") {
+        posPhrases.push(item);
+      } else if (item.kind === "type") {
+        posTypes.push(item);
+      }
+    }
+
+    const unscopedPosTerms = posTerms.filter((t) => !t.field);
+    const unscopedPosPhrases = posPhrases.filter((p) => !p.field);
+    const contiguousPhrases = unscopedPosPhrases.map((p) => p.value);
+    if (contiguousPhrases.length === 0 && unscopedPosTerms.length > 1) {
+      contiguousPhrases.push(unscopedPosTerms.map((t) => t.value).join(" "));
+    }
+
+    return {
+      items,
+      posTerms,
+      posPhrases,
+      posTypes,
+      negTerms,
+      negPhrases,
+      negTypes,
+      unscopedPosTerms,
+      unscopedPosPhrases,
+      contiguousPhrases,
+      hasPositive:
+        posTerms.length > 0 || posPhrases.length > 0 || posTypes.length > 0,
+    };
+  }
+
   function parseSearchQuery(rawQuery) {
     const query = (rawQuery || "").replace(/[\u201c\u201d]/g, '"').trim();
     if (!query) {
@@ -697,50 +940,69 @@
         allTerms: [],
         contiguousPhrases: [],
         copyText: "",
+        branches: [],
+        hasOperators: false,
+        hasPositive: false,
       };
     }
 
+    const {
+      branches: rawBranches,
+      hasOperators,
+      lastItem,
+    } = tokenizeQuery(query);
+    const endsWithBoundary = /["*\s]$/.test(query);
+    const autoPrefixItem =
+      !endsWithBoundary &&
+      lastItem &&
+      !lastItem.negated &&
+      lastItem.kind === "term"
+        ? lastItem
+        : null;
+
+    const branches = rawBranches
+      .map((items) => summarizeBranch(items, autoPrefixItem))
+      .filter((b) => b.hasPositive);
+
     const exactPhrases = [];
-    const phraseRegex = /"([^"]+)"/g;
-    let remaining = query.replace(phraseRegex, (_match, p1) => {
-      const phrase = p1.trim();
-      if (phrase) {
-        exactPhrases.push(phrase);
-      }
-      return " ";
-    });
-
-    const unclosedMatch = remaining.match(/"([^"]+)$/);
-    if (unclosedMatch?.[1].trim()) {
-      exactPhrases.push(unclosedMatch[1].trim());
-      remaining = remaining.slice(0, unclosedMatch.index);
-    }
-
-    const unquotedTokens = remaining
-      .split(/[\s\p{P}]+/u)
-      .map((t) => t.trim())
-      .filter(Boolean);
-
+    const unquotedTokens = [];
     const phraseTokens = [];
-    for (const ph of exactPhrases) {
-      const tokens = ph
-        .split(/[\s\p{P}]+/u)
-        .map((t) => t.trim())
-        .filter(Boolean);
-      phraseTokens.push(...tokens);
+    const contiguousPhrases = [];
+
+    for (const b of branches) {
+      for (const p of b.posPhrases) {
+        if (!p.field) {
+          exactPhrases.push(p.value);
+          phraseTokens.push(...splitWords(p.value));
+        }
+      }
+      for (const t of b.posTerms) {
+        if (!t.field) {
+          unquotedTokens.push(t.value);
+        }
+      }
+      for (const cp of b.contiguousPhrases) {
+        if (!contiguousPhrases.includes(cp)) contiguousPhrases.push(cp);
+      }
     }
 
     const allTerms = Array.from(new Set([...unquotedTokens, ...phraseTokens]));
 
-    const contiguousPhrases = [...exactPhrases];
-    if (contiguousPhrases.length === 0 && unquotedTokens.length > 1) {
-      contiguousPhrases.push(unquotedTokens.join(" "));
+    let copyText = "";
+    if (exactPhrases.length > 0) {
+      copyText = exactPhrases[0];
+    } else if (!hasOperators) {
+      copyText = query.replace(/"/g, "").trim();
+    } else if (branches.length > 0) {
+      const b0 = branches[0];
+      if (b0.posPhrases.length > 0) {
+        copyText = b0.posPhrases[0].value;
+      } else if (b0.unscopedPosTerms.length > 0) {
+        copyText = b0.unscopedPosTerms.map((t) => t.value).join(" ");
+      } else if (b0.posTerms.length > 0) {
+        copyText = b0.posTerms.map((t) => t.value).join(" ");
+      }
     }
-
-    const copyText =
-      exactPhrases.length > 0
-        ? exactPhrases[0]
-        : query.replace(/"/g, "").trim();
 
     return {
       query,
@@ -749,7 +1011,146 @@
       allTerms,
       contiguousPhrases,
       copyText,
+      branches,
+      hasOperators,
+      hasPositive: branches.length > 0,
     };
+  }
+
+  function fileMatchesTerm(file, termItem) {
+    if (!file || !termItem?.value) return false;
+    const clean = normalizeText(termItem.value).trim();
+    if (!clean) return false;
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = termItem.prefix
+      ? new RegExp(`(?<![\\p{L}\\p{N}])${escaped}`, "u")
+      : new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "u");
+
+    if (termItem.field === "title") {
+      return Boolean(file.title && re.test(normalizeText(file.title)));
+    }
+    if (termItem.field === "path") {
+      return Boolean(file.relpath && re.test(normalizeText(file.relpath)));
+    }
+    if (file.title && re.test(normalizeText(file.title))) return true;
+    if (file.relpath && re.test(normalizeText(file.relpath))) return true;
+    if (file.headings?.some((h) => h.text && re.test(normalizeText(h.text)))) {
+      return true;
+    }
+    if (file.text && re.test(normalizeText(file.text))) return true;
+    return false;
+  }
+
+  function fileMatchesBranchConstraints(file, branch) {
+    if (!file) return false;
+    if (
+      branch.posTypes.length > 0 &&
+      !branch.posTypes.every((t) => file.type === t.value)
+    ) {
+      return false;
+    }
+    if (branch.negTypes.some((t) => file.type === t.value)) {
+      return false;
+    }
+    if (
+      !branch.posPhrases.every((p) => hasExactPhrase(file, p.value, p.field))
+    ) {
+      return false;
+    }
+    if (branch.negPhrases.some((p) => hasExactPhrase(file, p.value, p.field))) {
+      return false;
+    }
+    return true;
+  }
+
+  function buildMiniSearchSubQuery(item, usePrefix) {
+    const sub = { queries: [item.value] };
+    const fields = fieldsForQualifier(item.field);
+    if (fields) sub.fields = fields;
+    if (usePrefix) sub.prefix = true;
+    return sub;
+  }
+
+  function searchBranch(branch) {
+    const positiveQueries = [];
+    for (const t of branch.posTerms) {
+      positiveQueries.push(
+        buildMiniSearchSubQuery(t, Boolean(t.prefix || t.autoPrefix)),
+      );
+    }
+    for (const p of branch.posPhrases) {
+      for (const word of splitWords(p.value)) {
+        positiveQueries.push(
+          buildMiniSearchSubQuery({ value: word, field: p.field }, false),
+        );
+      }
+    }
+
+    const negativeQueries = branch.negTerms.map((t) =>
+      buildMiniSearchSubQuery(t, Boolean(t.prefix)),
+    );
+
+    let hits = [];
+    if (miniSearch && positiveQueries.length > 0) {
+      const searchOptions = {
+        boost: SEARCH_BOOST,
+        combineWith: "AND",
+      };
+      const msQuery =
+        negativeQueries.length > 0
+          ? {
+              combineWith: "AND_NOT",
+              queries: [
+                { combineWith: "AND", queries: positiveQueries },
+                { combineWith: "OR", queries: negativeQueries },
+              ],
+            }
+          : { combineWith: "AND", queries: positiveQueries };
+
+      hits = miniSearch.search(msQuery, searchOptions).filter((h) => {
+        const file = fileById(h.id);
+        return fileMatchesBranchConstraints(file, branch);
+      });
+    } else {
+      for (const f of MANIFEST.files) {
+        if (!fileMatchesBranchConstraints(f, branch)) continue;
+        if (!branch.posTerms.every((t) => fileMatchesTerm(f, t))) continue;
+        if (branch.negTerms.some((t) => fileMatchesTerm(f, t))) continue;
+
+        let score = 1;
+        const titleNorm = normalizeText(f.title);
+        const relpathNorm = normalizeText(f.relpath);
+        const headingsNorm = (f.headings || [])
+          .map((h) => normalizeText(h.text))
+          .join(" ");
+        for (const t of branch.posTerms) {
+          const re = makePhraseRegex(t.value);
+          if (re?.test(titleNorm)) score += 5;
+          else if (re?.test(relpathNorm)) score += 3;
+          else if (re?.test(headingsNorm)) score += 2;
+        }
+        for (const p of branch.posPhrases) {
+          const re = makePhraseRegex(p.value);
+          if (re?.test(titleNorm)) score += 5;
+          else if (re?.test(relpathNorm)) score += 3;
+          else if (re?.test(headingsNorm)) score += 2;
+        }
+        hits.push({
+          id: f.id,
+          score,
+          terms: branch.posTerms.map((t) => t.value),
+        });
+      }
+    }
+
+    for (const hit of hits) {
+      const file = fileById(hit.id);
+      if (!file) continue;
+      for (const phrase of branch.contiguousPhrases) {
+        hit.score += scorePhraseMatch(file, phrase);
+      }
+    }
+    return hits;
   }
 
   function searchDocuments(rawQuery) {
@@ -757,112 +1158,104 @@
     if (!query) return [];
 
     const parsed = parseSearchQuery(query);
-    if (parsed.allTerms.length === 0) return [];
+    if (!parsed.hasPositive) return [];
 
-    let hits = [];
-    if (miniSearch) {
-      const searchOptions = {
-        boost: SEARCH_BOOST,
-        prefix: (_term, index, terms) => index === terms.length - 1,
-        combineWith: "AND",
-      };
-      hits = miniSearch.search(parsed.allTerms.join(" "), searchOptions);
-
-      if (parsed.exactPhrases.length > 0) {
-        hits = hits.filter((h) => {
-          const file = fileById(h.id);
-          return parsed.exactPhrases.every((phrase) =>
-            hasExactPhrase(file, phrase),
+    const merged = new Map();
+    for (const branch of parsed.branches) {
+      const branchHits = searchBranch(branch);
+      for (const bh of branchHits) {
+        const existing = merged.get(bh.id);
+        if (existing) {
+          existing.score = Math.max(existing.score, bh.score);
+          existing.terms = Array.from(
+            new Set([...existing.terms, ...(bh.terms || [])]),
           );
-        });
-      }
-    } else {
-      for (const f of MANIFEST.files) {
-        const titleNorm = normalizeText(f.title);
-        const relpathNorm = normalizeText(f.relpath);
-        const textNorm = normalizeText(f.text);
-        const headingsNorm = (f.headings || [])
-          .map((h) => normalizeText(h.text))
-          .join(" ");
-        const allDocNorm = `${titleNorm} ${relpathNorm} ${headingsNorm} ${textNorm}`;
-
-        const allMatched = parsed.allTerms.every((term) => {
-          const re = makePhraseRegex(term);
-          return re ? re.test(allDocNorm) : false;
-        });
-
-        if (!allMatched) continue;
-
-        if (parsed.exactPhrases.length > 0) {
-          const exactMatched = parsed.exactPhrases.every((phrase) =>
-            hasExactPhrase(f, phrase),
-          );
-          if (!exactMatched) continue;
-        }
-
-        let score = 1;
-        for (const term of parsed.allTerms) {
-          const re = makePhraseRegex(term);
-          if (re?.test(titleNorm)) score += 5;
-          else if (re?.test(relpathNorm)) score += 3;
-          else if (re?.test(headingsNorm)) score += 2;
-        }
-
-        hits.push({ id: f.id, score, terms: parsed.allTerms });
-      }
-    }
-
-    if (parsed.contiguousPhrases.length > 0) {
-      for (const hit of hits) {
-        const file = fileById(hit.id);
-        if (!file) continue;
-        for (const phrase of parsed.contiguousPhrases) {
-          hit.score += scorePhraseMatch(file, phrase);
+          existing.matchedBranches.push({ branch, hitTerms: bh.terms || [] });
+        } else {
+          merged.set(bh.id, {
+            id: bh.id,
+            score: bh.score,
+            terms: bh.terms || [],
+            matchedBranches: [{ branch, hitTerms: bh.terms || [] }],
+          });
         }
       }
     }
 
+    const hits = Array.from(merged.values());
     hits.sort((a, b) => b.score - a.score);
     return hits;
   }
 
-  function buildMatchTerms(parsed, hit) {
-    if (parsed.exactPhrases.length === 0) {
-      return [
-        ...parsed.contiguousPhrases,
-        ...Array.from(new Set([...parsed.allTerms, ...(hit?.terms || [])])),
-      ];
+  function collectScopedMatchTerms(branch, hitTerms, targetField) {
+    const terms = [];
+    const hasExact = branch.posPhrases.some(
+      (p) => !p.field || p.field === targetField,
+    );
+
+    if (!hasExact && (!targetField || targetField === "body")) {
+      terms.push(...branch.contiguousPhrases);
     }
 
-    const unquotedNorms = parsed.unquotedTokens
-      .map(normalizeText)
-      .filter(Boolean);
-    const seenNorms = new Set(unquotedNorms);
-    const matchedUnquoted = [];
-    if (unquotedNorms.length > 0 && hit?.terms) {
-      const lastUnquoted = unquotedNorms[unquotedNorms.length - 1];
-      const lastAllNorm = normalizeText(
-        parsed.allTerms[parsed.allTerms.length - 1],
-      );
-      if (lastUnquoted && lastAllNorm === lastUnquoted) {
-        for (const term of hit.terms) {
-          const norm = normalizeText(term);
-          if (seenNorms.has(norm)) continue;
-          if (norm.startsWith(lastUnquoted)) {
-            seenNorms.add(norm);
-            matchedUnquoted.push(term);
-          }
+    for (const p of branch.posPhrases) {
+      if (!p.field || p.field === targetField) {
+        terms.push(p.value);
+      }
+    }
+
+    const activeTerms = branch.posTerms.filter(
+      (t) => !t.field || t.field === targetField,
+    );
+    const prefixNorms = [];
+    const nonPrefixNorms = new Set();
+
+    for (const t of activeTerms) {
+      if (t.prefix) {
+        terms.push(`${t.value}*`);
+        prefixNorms.push(normalizeText(t.value));
+      } else {
+        terms.push(t.value);
+        if (t.autoPrefix && !hasExact) {
+          prefixNorms.push(normalizeText(t.value));
+        } else {
+          nonPrefixNorms.add(normalizeText(t.value));
         }
       }
     }
 
-    return Array.from(
-      new Set([
-        ...parsed.exactPhrases,
-        ...parsed.unquotedTokens,
-        ...matchedUnquoted,
-      ]),
-    );
+    if (hitTerms && hitTerms.length > 0 && prefixNorms.length > 0) {
+      for (const ht of hitTerms) {
+        const norm = normalizeText(ht);
+        if (nonPrefixNorms.has(norm)) continue;
+        if (prefixNorms.some((pn) => pn && norm.startsWith(pn))) {
+          terms.push(ht);
+        }
+      }
+    }
+
+    return terms;
+  }
+
+  function buildMatchTerms(parsed, hit) {
+    const matched = hit?.matchedBranches;
+    if (!matched || matched.length === 0) {
+      return parsed.branches.flatMap((b) =>
+        collectScopedMatchTerms(b, hit?.terms || [], null),
+      );
+    }
+    const bodyTerms = [];
+    const titleTerms = [];
+    const pathTerms = [];
+    for (const { branch, hitTerms } of matched) {
+      bodyTerms.push(...collectScopedMatchTerms(branch, hitTerms, null));
+      titleTerms.push(...collectScopedMatchTerms(branch, hitTerms, "title"));
+      pathTerms.push(...collectScopedMatchTerms(branch, hitTerms, "path"));
+    }
+    return {
+      bodyTerms: Array.from(new Set(bodyTerms)),
+      titleTerms: Array.from(new Set(titleTerms)),
+      pathTerms: Array.from(new Set(pathTerms)),
+    };
   }
 
   function runSearch(rawQuery) {
@@ -875,7 +1268,7 @@
     }
 
     const parsed = parseSearchQuery(query);
-    if (parsed.allTerms.length === 0) {
+    if (!parsed.hasPositive) {
       closeResults();
       if (searchResults) searchResults.innerHTML = "";
       return;
@@ -888,9 +1281,11 @@
 
     if (top.length === 0) {
       const emptyMsg =
-        parsed.allTerms.length > 1 || parsed.exactPhrases.length > 0
-          ? "No documents contain all terms"
-          : "No matches";
+        parsed.branches.length > 1 || parsed.hasOperators
+          ? "No matching documents"
+          : parsed.allTerms.length > 1 || parsed.exactPhrases.length > 0
+            ? "No documents contain all terms"
+            : "No matches";
       searchResults.innerHTML = `<div class="search-empty">${escapeHtml(emptyMsg)}</div>`;
     } else {
       const resultEntries = [];
@@ -898,9 +1293,12 @@
         .map((r) => {
           const file = fileById(r.id);
           if (!file) return "";
-          const matchTerms = buildMatchTerms(parsed, r);
-          const windows = extractSnippetWindows(file, matchTerms);
-          resultEntries.push({ windows, matchTerms });
+          const { bodyTerms, titleTerms, pathTerms } = buildMatchTerms(
+            parsed,
+            r,
+          );
+          const windows = extractSnippetWindows(file, bodyTerms);
+          resultEntries.push({ windows, matchTerms: bodyTerms });
           const pagerHtml =
             windows.length > 1
               ? `<span class="sr-pager">` +
@@ -910,15 +1308,14 @@
                 `</span>`
               : "";
           const pathHtml = file.relpath
-            ? `<span class="sr-path">${highlightTerms(file.relpath, matchTerms)}</span>`
+            ? `<span class="sr-path">${highlightTerms(file.relpath, pathTerms)}</span>`
             : "";
           return `
-        <div class="search-result" role="option" tabindex="0" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(matchTerms))}" data-hl="${escapeHtml(query)}">
-          <span class="sr-title"><span class="sr-title-main"><span class="type-icon">${iconFor(file.type)}</span><span class="sr-title-text">${highlightTerms(file.title, matchTerms)}</span></span>${pagerHtml}</span>
+        <div class="search-result" role="option" tabindex="0" data-id="${file.id}" data-terms="${escapeHtml(JSON.stringify(bodyTerms))}" data-hl="${escapeHtml(query)}">
+          <span class="sr-title"><span class="sr-title-main"><span class="type-icon">${iconFor(file.type)}</span><span class="sr-title-text">${highlightTerms(file.title, titleTerms)}</span></span>${pagerHtml}</span>
           ${pathHtml}
-          <span class="sr-snippet">${highlightTerms(windows[0], matchTerms)}</span>
-        </div>
-      `;
+          <span class="sr-snippet">${highlightTerms(windows[0], bodyTerms)}</span>
+        </div>`;
         })
         .join("");
 

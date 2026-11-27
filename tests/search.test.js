@@ -993,4 +993,198 @@ test("Exact quoted search only highlights and counts exact phrases in dropdown p
   assert.strictEqual(mixedHl.exactOnly, false);
 });
 
+test("Specialized search operators: OR, trailing wildcard *, negation -, and field/type qualifiers", async () => {
+  const files = [
+    {
+      id: "doc-docker",
+      title: "Docker Containers Guide",
+      relpath: "guides/docker.md",
+      src: "pages/doc-docker.html",
+      type: "markdown",
+      headings: [{ level: 2, id: "cfg", text: "Configuration" }],
+      text: "Configuring docker containers with compose. Supports legacy mode or modern mode.",
+    },
+    {
+      id: "doc-podman",
+      title: "Podman Runtime",
+      relpath: "guides/podman.html",
+      src: "pages/doc-podman.html",
+      type: "html",
+      headings: [],
+      text: "Podman runs rootless containers without a daemon. Reconfigure settings cleanly.",
+    },
+    {
+      id: "doc-pdf-france",
+      title: "European Atlas",
+      relpath: "maps/france-atlas.pdf",
+      src: "maps/france-atlas.pdf",
+      type: "pdf",
+      headings: [],
+      text: "The Map of France shows major rivers. Deprecated draft note inside.",
+    },
+    {
+      id: "doc-md-france",
+      title: "Travel Notes",
+      relpath: "notes/europe.md",
+      src: "pages/doc-md-france.html",
+      type: "markdown",
+      headings: [],
+      text: "Visiting Germany and reading a map of regions.",
+    },
+  ];
+
+  shell.setManifest({ files });
+  shell.initMiniSearch(files);
+
+  // 1. Trailing wildcard (*) in non-final position matches prefix words, not mid-word substrings
+  const wildcardHits = shell.searchDocuments("config* containers");
+  assert.strictEqual(wildcardHits.length, 1);
+  assert.strictEqual(wildcardHits[0].id, "doc-docker");
+
+  // Highlighting with trailing * highlights whole matched words (e.g. Configuring, Reconfigure excluded)
+  assert.strictEqual(
+    shell.highlightTerms("Configuring and Reconfigure config.", ["config*"]),
+    "<mark>Configuring</mark> and Reconfigure <mark>config</mark>.",
+  );
+  const listenerPrefixMatches = listener.findMatchesInText(
+    "Configuring and Reconfigure config.",
+    ["config*"],
+  );
+  assert.strictEqual(listenerPrefixMatches.length, 2);
+  assert.strictEqual(
+    "Configuring and Reconfigure config.".slice(
+      listenerPrefixMatches[0][0],
+      listenerPrefixMatches[0][1],
+    ),
+    "Configuring",
+  );
+
+  // 2. Negation (-word and -"phrase")
+  const negWordHits = shell.searchDocuments("containers -daemon");
+  assert.strictEqual(negWordHits.length, 1);
+  assert.strictEqual(negWordHits[0].id, "doc-docker");
+
+  const negPhraseHits = shell.searchDocuments('containers -"legacy mode"');
+  assert.strictEqual(negPhraseHits.length, 1);
+  assert.strictEqual(negPhraseHits[0].id, "doc-podman");
+
+  // Pure negation with no positive term or type returns nothing
+  assert.strictEqual(shell.searchDocuments("-daemon").length, 0);
+
+  // 3. Boolean OR (uppercase OR) vs lowercase 'or'
+  const orHits = shell.searchDocuments("docker OR podman");
+  assert.strictEqual(orHits.length, 2);
+
+  // Lowercase 'or' remains a normal AND term
+  const lowerOrHits = shell.searchDocuments("docker or compose");
+  assert.strictEqual(lowerOrHits.length, 1);
+  assert.strictEqual(lowerOrHits[0].id, "doc-docker");
+
+  // OR with quoted phrase: non-matching branch does not fail matching branch
+  const orPhraseHits = shell.searchDocuments('"Map of France" OR Germany');
+  assert.strictEqual(orPhraseHits.length, 2);
+
+  // 4. Field and type qualifiers (type:, title:, path:)
+  const typePdfHits = shell.searchDocuments("type:pdf");
+  assert.strictEqual(typePdfHits.length, 1);
+  assert.strictEqual(typePdfHits[0].id, "doc-pdf-france");
+
+  const typeMdNegHits = shell.searchDocuments("type:md -docker");
+  assert.strictEqual(typeMdNegHits.length, 1);
+  assert.strictEqual(typeMdNegHits[0].id, "doc-md-france");
+
+  const titleOnlyHits = shell.searchDocuments("title:containers");
+  assert.strictEqual(titleOnlyHits.length, 1);
+  assert.strictEqual(titleOnlyHits[0].id, "doc-docker");
+
+  const titlePhraseHits = shell.searchDocuments('title:"Docker Containers"');
+  assert.strictEqual(titlePhraseHits.length, 1);
+  assert.strictEqual(titlePhraseHits[0].id, "doc-docker");
+
+  const pathHits = shell.searchDocuments("path:maps/france*");
+  assert.strictEqual(pathHits.length, 1);
+  assert.strictEqual(pathHits[0].id, "doc-pdf-france");
+
+  // 5. Highlight parser ignores OR, -negated, and qualifiers while keeping prefix*
+  const hlOp = listener.parseHighlightQuery(
+    'config* OR podman -daemon -"legacy mode" type:md title:Runtime',
+  );
+  assert.deepStrictEqual(hlOp.phrases, []);
+  assert.deepStrictEqual(hlOp.tokens, ["config*", "podman"]);
+  assert.strictEqual(hlOp.exactOnly, false);
+
+  // 7. copyText strips operators cleanly for Ctrl+F / PDF #search=
+  assert.strictEqual(
+    shell.parseSearchQuery("config* -daemon type:md").copyText,
+    "config",
+  );
+  assert.strictEqual(
+    shell.parseSearchQuery("docker OR podman").copyText,
+    "docker",
+  );
+  assert.strictEqual(
+    shell.parseSearchQuery('type:pdf "Map of France" -draft').copyText,
+    "Map of France",
+  );
+
+  // 8. runSearch integrates OR branch highlighting & title-only scoping in DOM dropdown
+  let parsedResults = [];
+  const searchResults = {
+    _html: "",
+    classes: new Set(),
+    classList: {
+      add: (c) => searchResults.classes.add(c),
+      remove: (c) => searchResults.classes.delete(c),
+      contains: (c) => searchResults.classes.has(c),
+    },
+    set innerHTML(val) {
+      this._html = val;
+      parsedResults = [];
+      const re = /<div class="search-result"[^>]*>([\s\S]*?)<\/div>/g;
+      let m = re.exec(val);
+      while (m !== null) {
+        const body = m[1];
+        const titleM = body.match(/<span class="sr-title-text">([\s\S]*?)<\/span>/);
+        const pathM = body.match(/<span class="sr-path">([\s\S]*?)<\/span>/);
+        const snipM = body.match(/<span class="sr-snippet">([\s\S]*?)<\/span>/);
+        parsedResults.push({
+          title: titleM ? titleM[1] : "",
+          path: pathM ? pathM[1] : "",
+          snippet: snipM ? snipM[1] : "",
+          addEventListener: () => {},
+          querySelector: () => null,
+        });
+        m = re.exec(val);
+      }
+    },
+    get innerHTML() {
+      return this._html;
+    },
+    querySelectorAll: () => parsedResults,
+    querySelector: () => parsedResults[0] || null,
+  };
+  shell._setEnv(
+    { getElementById: (id) => (id === "search-results" ? searchResults : null) },
+    {},
+  );
+
+  shell.runSearch('title:Guide containers -daemon');
+  assert.strictEqual(parsedResults.length, 1);
+  assert.strictEqual(
+    parsedResults[0].title,
+    "Docker <mark>Containers</mark> <mark>Guide</mark>",
+  );
+  assert.ok(parsedResults[0].snippet.includes("<mark>containers</mark>"));
+
+  // OR query does not highlight non-matching branch terms or 'OR'
+  shell.runSearch('"Map of France" OR Germany');
+  assert.strictEqual(parsedResults.length, 2);
+  const mdEntry = parsedResults.find((r) => r.title === "Travel Notes");
+  assert.ok(mdEntry);
+  assert.ok(mdEntry.snippet.includes("<mark>Germany</mark>"));
+  assert.ok(!mdEntry.snippet.includes("<mark>map</mark>"));
+  assert.ok(!mdEntry.snippet.includes("<mark>of</mark>"));
+});
+
+
 

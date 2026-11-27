@@ -14,7 +14,7 @@ Turn a folder of Markdown, HTML, and PDF files into a clean, searchable, dark-mo
   - **Markdown** (`.md`, `.markdown`): Rendered with syntax highlighting, tables, and admonitions.
   - **HTML** (`.html`, `.htm`): Formatted with isolated reader styling and link rewriting.
   - **PDF** (`.pdf`): Integrated directly with bookmark outlines and portable file bundling.
-- **Fast Client-Side Search**: Full-text MiniSearch indexing across titles, filenames, relative paths, headings, and body text, with Google-style `"quoted phrase"` matching, clipboard phrase handoff (`Ctrl+F` / `⌘F`), in-dropdown match preview cycling (`‹ 1 / N ›` via `←`/`→`), and keyboard navigation (`↑`/`↓`/`←`/`→`/`Enter`/`Esc`).
+- **Fast Client-Side Search**: Full-text MiniSearch indexing across titles, filenames, relative paths, headings, and body text, with `"exact phrase"` matching, `OR` logic, `word*` wildcards, `-exclusions`, `type:`/`title:`/`path:` qualifiers, clipboard phrase handoff (`Ctrl+F` / `⌘F`), in-dropdown match preview cycling (`‹ 1 / N ›` via `←`/`→`), and keyboard navigation (`↑`/`↓`/`←`/`→`/`Enter`/`Esc`).
 - **LLM-Ready Workflows**:
   - **Copy Page**: One-click button in the header toolbar copies the active page's clean, structured Markdown to your clipboard.
   - **Standardized `llms.txt`**: Automatically creates `llms.txt` index and `llms-full.txt` corpus following the [llmstxt.org](https://llmstxt.org) standard.
@@ -85,6 +85,21 @@ docs-site --help
 | `--dump` | Print clean Markdown to `stdout` instead of building a site |
 | `--file TARGET` | Relative path or filename to print when using `--dump` |
 | `--version` | Show installed `docs-site` version and exit |
+
+### Search Syntax
+
+Search requires all terms by default (`AND`), and supports Google-style operators:
+
+| Syntax | Behavior | Example |
+| --- | --- | --- |
+| `term1 term2` | Match documents containing both terms | `docker compose` |
+| `"exact phrase"` | Match exact consecutive words (also scopes dropdown previews, counts, and highlights) | `"Map of France"` |
+| `OR` | Match either branch (must be uppercase `OR`; lowercase `or` stays a regular term) | `docker OR podman` |
+| `word*` | Trailing prefix wildcard anywhere in the query | `config* container` |
+| `-term` / `-"phrase"` | Exclude documents containing a term or exact phrase | `install -legacy -"old api"` |
+| `type:<fmt>` | Filter by format (`html`/`htm`, `md`/`markdown`, `pdf`; also supports `-type:...`) | `type:pdf "Map of France"` |
+| `title:<query>` | Restrict term, `word*`, or `"phrase"` to document titles | `title:"Getting Started"` |
+| `path:<query>` | Restrict term, `word*`, or `"phrase"` to relative file paths and filenames | `path:guides/docker*` |
 
 ### CLI Pipe Workflow (LLMs & Tooling)
 
